@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
         path: [],
         isCheckoutModalOpen: false,
         isQrModalOpen: false,
+        isAddProductModalOpen: false,
         sortKey: 'name',
         sortDirection: 'asc',
     };
@@ -24,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 4, name: 'Butcher Shop', x: 3, y: 18, width: 7, height: 7, entrance: { x: 3, y: 0 }, color: 'bg-red-200 dark:bg-red-800' },
         { id: 5, name: 'Frozen Foods', x: 13, y: 18, width: 12, height: 6, entrance: { x: 6, y: 0 }, color: 'bg-cyan-200 dark:bg-cyan-800' },
         { id: 6, name: 'Checkout', x: 30, y: 16, width: 7, height: 10, entrance: { x: 0, y: 5 }, color: 'bg-purple-200 dark:bg-purple-800' },
+        { id: 7, name: 'Washroom', x: 1, y: 11, width: 4, height: 4, entrance: { x: 4, y: 2 }, color: 'bg-gray-200 dark:bg-gray-600' },
+        { id: 8, name: 'Mall Office', x: 30, y: 10, width: 7, height: 4, entrance: { x: 0, y: 2 }, color: 'bg-slate-200 dark:bg-slate-700' },
     ];
 
     const INITIAL_PRODUCTS = [
@@ -89,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!smallest) break;
 
                 if (smallest.x === end.x && smallest.y === end.y) {
-                    let currentKey = `${end.x},${end.y}`;
+                    let currentKey = `${end.x},${y}`;
                     while (previous[currentKey]) {
                         const [x, y] = currentKey.split(',').map(Number);
                         path.unshift({ x, y });
@@ -248,7 +251,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         itemListContainer.innerHTML = `
-            <h2 class="text-xl font-bold mb-4 text-gray-700 dark:text-gray-300">${state.isShopkeeperMode ? 'Manage Products' : 'Available Items'}</h2>
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-xl font-bold text-gray-700 dark:text-gray-300">${state.isShopkeeperMode ? 'Manage Products' : 'Available Items'}</h2>
+              ${state.isShopkeeperMode ? `<button id="add-product-btn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-3 rounded-lg text-sm transition-transform transform hover:scale-105">Add New</button>` : ''}
+            </div>
             <div class="grid grid-cols-5 gap-2 text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
                 <div class="col-span-2 cursor-pointer" data-sort="name">Product ${sortIcon('name')}</div>
                 <div class="text-center cursor-pointer" data-sort="price">Price ${sortIcon('price')}</div>
@@ -307,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         modalContainer.innerHTML = `
             <div id="checkout-modal" class="modal ${state.isCheckoutModalOpen ? 'is-open' : ''}">
-              <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6 relative">
+              <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6 relative" onclick="event.stopPropagation()">
                 <button data-action="close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                 <h2 class="text-2xl font-bold text-center mb-2 text-gray-800 dark:text-white">Checkout</h2>
                 <p class="text-center text-gray-500 dark:text-gray-400 mb-6">Thank you for shopping with us!</p>
@@ -321,12 +327,52 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <div id="qr-modal" class="modal ${state.isQrModalOpen ? 'is-open' : ''}">
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-8 relative">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-8 relative" onclick="event.stopPropagation()">
                     <button data-action="close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                     <h2 class="text-2xl font-bold text-center mb-4 text-gray-800 dark:text-white">Share App Link</h2>
                     <div class="flex justify-center mb-4"><div class="p-2 bg-white rounded-lg">${generateQrCodeSvg()}</div></div>
                     <p class="text-center text-gray-600 dark:text-gray-400 text-sm">Scan this code to open on another device.</p>
                     <input type="text" readonly value="${window.location.href}" class="w-full mt-4 bg-gray-100 dark:bg-gray-700 border rounded-lg p-2 text-center text-xs" onfocus="this.select()" />
+                </div>
+            </div>
+
+            <div id="add-product-modal" class="modal ${state.isAddProductModalOpen ? 'is-open' : ''}">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6 relative" onclick="event.stopPropagation()">
+                    <button data-action="close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                    <h2 class="text-2xl font-bold text-center mb-6 text-gray-800 dark:text-white">Add New Product</h2>
+                    <form id="add-product-form" class="space-y-4">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Product Name</label>
+                            <input type="text" name="name" required class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="price" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Price</label>
+                                <input type="number" name="price" step="0.01" required class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="rating" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Rating (1-5)</label>
+                                <input type="number" name="rating" step="0.1" min="1" max="5" required class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="discount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Discount (%)</label>
+                                <input type="number" name="discount" min="0" max="100" class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="shopId" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Shop</label>
+                                <select name="shopId" required class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    ${SHOPS.map(shop => `<option value="${shop.id}">${shop.name}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">
+                            Save Product
+                        </button>
+                    </form>
                 </div>
             </div>
         `;
@@ -338,10 +384,37 @@ document.addEventListener('DOMContentLoaded', () => {
         renderItemList();
         renderCart();
         renderModals();
-        document.body.classList.toggle('modal-open', state.isCheckoutModalOpen || state.isQrModalOpen);
+        document.body.classList.toggle('modal-open', state.isCheckoutModalOpen || state.isQrModalOpen || state.isAddProductModalOpen);
     };
 
     // --- EVENT HANDLERS ---
+    const handleAddNewProduct = () => {
+        const form = document.getElementById('add-product-form');
+        if (!form) return;
+        
+        const formData = new FormData(form);
+        const newProduct = {
+            id: state.products.length > 0 ? Math.max(...state.products.map(p => p.id)) + 1 : 1,
+            name: formData.get('name')?.toString().trim(),
+            price: parseFloat(formData.get('price')),
+            rating: parseFloat(formData.get('rating')),
+            shopId: parseInt(formData.get('shopId'), 10),
+            discount: formData.get('discount') ? parseFloat(formData.get('discount')) : undefined,
+        };
+        
+        if (!newProduct.discount) {
+            delete newProduct.discount;
+        }
+
+        if (!newProduct.name || isNaN(newProduct.price) || isNaN(newProduct.rating) || isNaN(newProduct.shopId)) {
+            alert('Please fill out all required fields with valid values.');
+            return;
+        }
+
+        state.products.push(newProduct);
+        handleModal('addProduct', false);
+    };
+
     const handleToggleMode = () => {
         state.isShopkeeperMode = !state.isShopkeeperMode;
         render();
@@ -384,18 +457,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleModal = (modal, open) => {
         if (modal === 'checkout') state.isCheckoutModalOpen = open;
         if (modal === 'qr') state.isQrModalOpen = open;
+        if (modal === 'addProduct') state.isAddProductModalOpen = open;
         render();
     };
 
     // --- INITIALIZATION ---
     const setupEventListeners = () => {
         document.body.addEventListener('click', (e) => {
-            const target = e.target.closest('[data-action], [data-sort], #mode-toggle, #qr-code-btn, #find-route-btn, #clear-cart-btn, #checkout-btn');
+            const target = e.target.closest('[data-action], [data-sort], #mode-toggle, #qr-code-btn, #add-product-btn, #find-route-btn, #clear-cart-btn, #checkout-btn, .modal');
             if (!target) return;
 
             // Header buttons
             if (target.id === 'mode-toggle') handleToggleMode();
             if (target.id === 'qr-code-btn') handleModal('qr', true);
+            if (target.id === 'add-product-btn') handleModal('addProduct', true);
 
             // Item list
             const sortKey = target.dataset.sort;
@@ -415,6 +490,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (itemAction === 'close-modal' || target.classList.contains('modal')) {
                 handleModal('checkout', false);
                 handleModal('qr', false);
+                handleModal('addProduct', false);
+            }
+        });
+
+        document.body.addEventListener('submit', (e) => {
+            if (e.target.id === 'add-product-form') {
+                e.preventDefault();
+                handleAddNewProduct();
             }
         });
     };
