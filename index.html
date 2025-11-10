@@ -1,41 +1,534 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>In-Store Navigator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/"
-  }
-}
-</script>
-</head>
-<body class="bg-gray-100 dark:bg-gray-900">
-    <div id="app-container" class="min-h-screen font-sans text-gray-800 dark:text-gray-200">
-        <header id="header-container"></header>
-        <main class="container mx-auto p-4 lg:p-6">
-            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div class="lg:col-span-3 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 lg:p-6 flex flex-col items-center justify-center">
-                    <h2 id="map-title" class="text-xl font-bold mb-4 self-start text-gray-700 dark:text-gray-300"></h2>
-                    <div id="map-container" class="w-full"></div>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- STATE ---
+    const state = {
+        language: 'en',
+        isShopkeeperMode: false,
+        products: [],
+        selectedProductIds: new Set(),
+        path: [],
+        activeShopIds: new Set(),
+        isCheckoutModalOpen: false,
+        isQrModalOpen: false,
+        isAddProductModalOpen: false,
+        sortKey: 'name',
+        sortDirection: 'asc',
+        searchQuery: '',
+        isVoiceFeedbackEnabled: true,
+        isListening: false,
+    };
+
+    // --- TRANSLATIONS ---
+    const translations = {
+      en: {
+        appTitle: 'In-Store Navigator',
+        shopper: 'Shopper',
+        shopkeeper: 'Shopkeeper',
+        floorMapTitle: 'Floor Map',
+        youAreHere: 'You',
+        hoursLabel: 'Hours',
+        statusLabel: 'Status',
+        openStatus: 'Open',
+        closedStatus: 'Closed',
+        manageProducts: 'Manage Products',
+        availableItems: 'Available Items',
+        searchPlaceholder: 'Search for products...',
+        productColumn: 'Product',
+        priceColumn: 'Price',
+        ratingColumn: 'Rating',
+        selectColumn: 'Select',
+        actionColumn: 'Action',
+        yourList: 'Your List',
+        clearAll: 'Clear All',
+        total: 'Total',
+        findRoute: 'Find Route',
+        routeFound: 'Route Found!',
+        checkout: 'Checkout',
+        checkoutTitle: 'Checkout',
+        checkoutMessage: 'Thank you for shopping with us!',
+        items: 'Items',
+        totalAmount: 'Total Amount',
+        paymentMethod: 'Payment Method',
+        paymentPlaceholder: '(Payment system is a placeholder)',
+        confirmPurchase: 'Confirm Purchase',
+        shareTitle: 'Share App Link',
+        shareMessage: 'Scan this code to open the navigator on another device.',
+        addNew: 'Add New',
+        addNewProductTitle: 'Add New Product',
+        productNameLabel: 'Product Name',
+        priceLabel: 'Price',
+        ratingLabel: 'Rating (1-5)',
+        discountLabel: 'Discount (%)',
+        shopLabel: 'Shop',
+        saveProduct: 'Save Product',
+        edit: 'Edit',
+        save: 'Save',
+        voiceSearch: 'Voice Search',
+        listening: 'Listening...',
+        listCleared: 'List cleared',
+        shopkeeperModeOn: 'Shopkeeper mode activated',
+        shopperModeOn: 'Shopper mode activated',
+        searchingFor: 'Searching for'
+      },
+      kn: {
+        appTitle: 'ಅಂಗಡಿ ನ್ಯಾವಿಗೇಟರ್',
+        shopper: 'ಗ್ರಾಹಕ',
+        shopkeeper: 'ಅಂಗಡಿಯವ',
+        floorMapTitle: 'ನೆಲದ ನಕ್ಷೆ',
+        youAreHere: 'ನೀವು',
+        hoursLabel: 'ಗಂಟೆಗಳು',
+        statusLabel: 'ಸ್ಥಿತಿ',
+        openStatus: 'ತೆರೆದಿದೆ',
+        closedStatus: 'ಮುಚ್ಚಿದೆ',
+        manageProducts: 'ಉತ್ಪನ್ನಗಳನ್ನು ನಿರ್ವಹಿಸಿ',
+        availableItems: 'ಲಭ್ಯವಿರುವ ವಸ್ತುಗಳು',
+        searchPlaceholder: 'ಉತ್ಪನ್ನಗಳಿಗಾಗಿ ಹುಡುಕಿ...',
+        productColumn: 'ಉತ್ಪನ್ನ',
+        priceColumn: 'ಬೆಲೆ',
+        ratingColumn: 'ರೇಟಿಂಗ್',
+        selectColumn: 'ಆಯ್ಕೆ ಮಾಡಿ',
+        actionColumn: 'ಕ್ರಿಯೆ',
+        yourList: 'ನಿಮ್ಮ ಪಟ್ಟಿ',
+        clearAll: 'ಎಲ್ಲವನ್ನು ತೆರವುಗೊಳಿಸಿ',
+        total: 'ಒಟ್ಟು',
+        findRoute: 'ಮಾರ್ಗವನ್ನು ಹುಡುಕಿ',
+        routeFound: 'ಮಾರ್ಗ ಕಂಡುಬಂದಿದೆ!',
+        checkout: 'ಚೆಕ್ಔಟ್',
+        checkoutTitle: 'ಚೆಕ್ಔಟ್',
+        checkoutMessage: 'ನಮ್ಮೊಂದಿಗೆ ಶಾಪಿಂಗ್ ಮಾಡಿದ್ದಕ್ಕಾಗಿ ಧನ್ಯವಾದಗಳು!',
+        items: 'ವಸ್ತುಗಳು',
+        totalAmount: 'ಒಟ್ಟು ಮೊತ್ತ',
+        paymentMethod: 'ಪಾವತಿ ವಿಧಾನ',
+        paymentPlaceholder: '(ಪಾವತಿ ವ್ಯವಸ್ಥೆಯು ಸ್ಥಳೀಯವಾಗಿದೆ)',
+        confirmPurchase: 'ಖರೀದಿಯನ್ನು ಖಚಿತಪಡಿಸಿ',
+        shareTitle: 'ಅಪ್ಲಿಕೇಶನ್ ಲಿಂಕ್ ಹಂಚಿಕೊಳ್ಳಿ',
+        shareMessage: 'ಮತ್ತೊಂದು ಸಾಧನದಲ್ಲಿ ನ್ಯಾವಿಗೇಟರ್ ತೆರೆಯಲು ಈ ಕೋಡ್ ಅನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.',
+        addNew: 'ಹೊಸದನ್ನು ಸೇರಿಸಿ',
+        addNewProductTitle: 'ಹೊಸ ಉತ್ಪನ್ನವನ್ನು ಸೇರಿಸಿ',
+        productNameLabel: 'ಉತ್ಪನ್ನದ ಹೆಸರು',
+        priceLabel: 'ಬೆಲೆ',
+        ratingLabel: 'ರೇಟಿಂಗ್ (1-5)',
+        discountLabel: 'ರಿಯಾಯಿತಿ (%)',
+        shopLabel: 'ಅಂಗಡಿ',
+        saveProduct: 'ಉತ್ಪನ್ನವನ್ನು ಉಳಿಸಿ',
+        edit: ' ಸಂಪಾದಿಸಿ',
+        save: 'ಉಳಿಸಿ',
+        voiceSearch: 'ಧ್ವನಿ ಹುಡುಕಾಟ',
+        listening: 'ಕೇಳುತ್ತಿದೆ...',
+        listCleared: 'ಪಟ್ಟಿ ತೆರವುಗೊಳಿಸಲಾಗಿದೆ',
+        shopkeeperModeOn: 'ಅಂಗಡಿಯವ ಮೋಡ್ ಸಕ್ರಿಯಗೊಂಡಿದೆ',
+        shopperModeOn: 'ಗ್ರಾಹಕ ಮೋಡ್ ಸಕ್ರಿಯಗೊಂಡಿದೆ',
+        searchingFor: 'ಹುಡುಕಲಾಗುತ್ತಿದೆ'
+      },
+    };
+
+    const t = (key) => translations[state.language][key] || translations.en[key];
+
+    // --- CONSTANTS & DATA ---
+    const MAP_WIDTH = 40;
+    const MAP_HEIGHT = 30;
+    const GRID_CELL_SIZE = 16;
+    const START_POINT = { x: 2, y: 16 };
+
+    const SHOPS = [
+      { id: 1, name: { en: 'Fresh Produce', kn: 'ತಾಜಾ ಉತ್ಪನ್ನಗಳು' }, x: 3, y: 3, width: 8, height: 6, entrance: { x: 4, y: 6 }, color: 'bg-green-200 dark:bg-green-800', openTime: '8:00 AM', closeTime: '9:00 PM' },
+      { id: 2, name: { en: 'Bakery', kn: 'ಬೇಕರಿ' }, x: 14, y: 3, width: 6, height: 8, entrance: { x: 3, y: 8 }, color: 'bg-yellow-200 dark:bg-yellow-800', openTime: '7:00 AM', closeTime: '8:00 PM' },
+      { id: 3, name: { en: 'Dairy & Cheese', kn: 'ಡೈರಿ ಮತ್ತು ಚೀಸ್' }, x: 23, y: 3, width: 10, height: 5, entrance: { x: 5, y: 5 }, color: 'bg-blue-200 dark:bg-blue-800', openTime: '8:00 AM', closeTime: '9:00 PM' },
+      { id: 4, name: { en: 'Butcher Shop', kn: 'ಕಟುಕನ ಅಂಗಡಿ' }, x: 3, y: 18, width: 7, height: 7, entrance: { x: 3, y: 0 }, color: 'bg-red-200 dark:bg-red-800', openTime: '9:00 AM', closeTime: '7:00 PM' },
+      { id: 5, name: { en: 'Frozen Foods', kn: 'ಹೆಪ್ಪುಗಟ್ಟಿದ ಆಹಾರಗಳು' }, x: 13, y: 18, width: 12, height: 6, entrance: { x: 6, y: 0 }, color: 'bg-cyan-200 dark:bg-cyan-800', openTime: '8:00 AM', closeTime: '9:00 PM' },
+      { id: 6, name: { en: 'Checkout', kn: 'ಚೆಕ್ಔಟ್' }, x: 30, y: 16, width: 7, height: 10, entrance: { x: 0, y: 5 }, color: 'bg-purple-200 dark:bg-purple-800', openTime: '7:00 AM', closeTime: '10:00 PM' },
+      { id: 7, name: { en: 'Washroom', kn: 'ಶೌಚಾಲಯ' }, x: 1, y: 11, width: 4, height: 4, entrance: { x: 4, y: 2 }, color: 'bg-gray-200 dark:bg-gray-600', openTime: '6:00 AM', closeTime: '11:00 PM' },
+      { id: 8, name: { en: 'Mall Office', kn: 'ಮಾಲ್ ಕಚೇರಿ' }, x: 30, y: 10, width: 7, height: 4, entrance: { x: 0, y: 2 }, color: 'bg-slate-200 dark:bg-slate-700', openTime: '9:00 AM', closeTime: '5:00 PM' },
+    ];
+    
+    const INITIAL_PRODUCTS = [
+      { id: 1, name: { en: 'Organic Apples', kn: 'ಸಾವಯವ ಸೇಬುಗಳು' }, price: 3.50, rating: 4.8, shopId: 1, discount: 10 },
+      { id: 2, name: { en: 'Avocados', kn: 'ಆವಕಾಡೊಗಳು' }, price: 1.75, rating: 4.9, shopId: 1 },
+      { id: 3, name: { en: 'Sourdough Bread', kn: 'ಹುಳಿ ಹಿಟ್ಟಿನ ಬ್ರೆಡ್' }, price: 5.20, rating: 4.7, shopId: 2 },
+      { id: 4, name: { en: 'Croissants', kn: 'ಕ್ರೋಸೆಂಟ್‌ಗಳು' }, price: 2.50, rating: 4.6, shopId: 2 },
+      { id: 5, name: { en: 'Cheddar Cheese', kn: 'ಚೆಡ್ಡಾರ್ ಚೀಸ್' }, price: 8.00, rating: 4.5, shopId: 3 },
+      { id: 6, name: { en: 'Whole Milk (1L)', kn: 'ಸಂಪೂರ್ಣ ಹಾಲು (1L)' }, price: 2.10, rating: 4.4, shopId: 3 },
+      { id: 7, name: { en: 'Organic Greek Yogurt', kn: 'ಸಾವಯವ ಗ್ರೀಕ್ ಮೊಸರು' }, price: 4.50, rating: 4.8, shopId: 3, discount: 15 },
+      { id: 8, name: { en: 'Ribeye Steak (lb)', kn: 'ರಿಬೈ ಸ್ಟೀಕ್ (lb)' }, price: 15.99, rating: 5.0, shopId: 4 },
+      { id: 9, name: { en: 'Ground Beef (lb)', kn: 'ಕೊಚ್ಚಿದ ಗೋಮಾಂಸ (lb)' }, price: 6.50, rating: 4.3, shopId: 4 },
+      { id: 10, name: { en: 'Frozen Pizza', kn: 'ಹೆಪ್ಪುಗಟ್ಟಿದ ಪಿಜ್ಜಾ' }, price: 7.99, rating: 4.1, shopId: 5 },
+      { id: 11, name: { en: 'Mixed Berries (frozen)', kn: 'ಮಿಶ್ರ ಹಣ್ಣುಗಳು (ಹೆಪ್ಪುಗಟ್ಟಿದ)' }, price: 6.25, rating: 4.7, shopId: 5 },
+      { id: 12, name: { en: 'Ice Cream Tub', kn: 'ಐಸ್ ಕ್ರೀಮ್ ಟಬ್' }, price: 5.50, rating: 4.9, shopId: 5 },
+    ];
+    
+    // --- DOM Elements ---
+    const headerContainer = document.getElementById('header-container');
+    const mapTitle = document.getElementById('map-title');
+    const mapContainer = document.getElementById('map-container');
+    const itemListContainer = document.getElementById('item-list-container');
+    const cartWrapper = document.getElementById('cart-wrapper');
+    const cartContainer = document.getElementById('cart-container');
+    const modalContainer = document.getElementById('modal-container');
+
+    // --- VOICE & SPEECH ---
+    const speak = (text, lang = state.language) => {
+        if (!state.isVoiceFeedbackEnabled || !('speechSynthesis' in window)) return;
+        speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang === 'en' ? 'en-US' : 'kn-IN';
+        utterance.rate = 1.0;
+        speechSynthesis.speak(utterance);
+    };
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            state.searchQuery = transcript;
+            speak(`${t('searchingFor')} "${transcript}"`);
+        };
+
+        recognition.onend = () => {
+            state.isListening = false;
+            render();
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            state.isListening = false;
+            render();
+        };
+    }
+
+    // --- DIJKSTRA'S ALGORITHM ---
+    const dijkstra = (() => {
+        class PriorityQueue {
+          constructor() { this.nodes = []; }
+          enqueue(point, priority) { this.nodes.push({ point, priority }); this.sort(); }
+          dequeue() { return this.nodes.shift()?.point || null; }
+          isEmpty() { return !this.nodes.length; }
+          sort() { this.nodes.sort((a, b) => a.priority - b.priority); }
+        }
+        const grid = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(1));
+        SHOPS.forEach(shop => {
+            for (let y = shop.y; y < shop.y + shop.height; y++) {
+                for (let x = shop.x; x < shop.x + shop.width; x++) { grid[y][x] = 0; }
+            }
+            grid[shop.y + shop.entrance.y][shop.x + shop.entrance.x] = 1;
+        });
+        const findPath = (start, end) => {
+            const distances = {}; const previous = {}; const pq = new PriorityQueue(); const path = [];
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    const key = `${x},${y}`;
+                    distances[key] = (x === start.x && y === start.y) ? 0 : Infinity;
+                    previous[key] = null;
+                }
+            }
+            pq.enqueue(start, 0);
+            while (!pq.isEmpty()) {
+                const smallest = pq.dequeue(); if (!smallest) break;
+                if (smallest.x === end.x && smallest.y === end.y) {
+                    let currentKey = `${end.x},${y}`;
+                    while (previous[currentKey]) {
+                        const [x_coord, y_coord] = currentKey.split(',').map(Number);
+                        path.unshift({ x: x_coord, y: y_coord }); currentKey = previous[currentKey];
+                    }
+                    path.unshift(start); break;
+                }
+                const neighbors = [{ x: smallest.x + 1, y: smallest.y }, { x: smallest.x - 1, y: smallest.y }, { x: smallest.x, y: smallest.y + 1 }, { x: smallest.x, y: smallest.y - 1 }];
+                for (const neighbor of neighbors) {
+                    if (neighbor.x >= 0 && neighbor.x < MAP_WIDTH && neighbor.y >= 0 && neighbor.y < MAP_HEIGHT && grid[neighbor.y][neighbor.x] === 1) {
+                        const smallestKey = `${smallest.x},${smallest.y}`; const neighborKey = `${neighbor.x},${neighbor.y}`;
+                        const candidate = distances[smallestKey] + 1;
+                        if (candidate < distances[neighborKey]) {
+                            distances[neighborKey] = candidate; previous[neighborKey] = smallestKey; pq.enqueue(neighbor, candidate);
+                        }
+                    }
+                }
+            }
+            return path;
+        };
+        return (start, targets) => {
+            if (!targets.length) return [];
+            let fullPath = []; let currentStart = start; let remainingTargets = [...targets];
+            while (remainingTargets.length > 0) {
+                let nearestTarget = null; let shortestDist = Infinity;
+                for (const target of remainingTargets) {
+                    const dist = Math.hypot(target.x + target.entrance.x - currentStart.x, target.y + target.entrance.y - currentStart.y);
+                    if (dist < shortestDist) { shortestDist = dist; nearestTarget = target; }
+                }
+                if (nearestTarget) {
+                    const targetPoint = { x: nearestTarget.x + nearestTarget.entrance.x, y: nearestTarget.y + nearestTarget.entrance.y };
+                    const segment = findPath(currentStart, targetPoint);
+                    if (segment.length > 0) {
+                        fullPath = fullPath.concat(segment.slice(1)); currentStart = targetPoint;
+                    }
+                    remainingTargets = remainingTargets.filter(t => t.id !== nearestTarget.id);
+                } else { break; }
+            }
+            if (fullPath.length > 0) fullPath.unshift(start);
+            return fullPath;
+        };
+    })();
+
+    // --- RENDER FUNCTIONS ---
+    const renderHeader = () => {
+        headerContainer.innerHTML = `
+            <div class="container mx-auto px-4 lg:px-6 py-4 flex justify-between items-center">
+              <div class="flex items-center gap-3">
+                  <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 16.382V5.618a1 1 0 00-1.447-.894L15 7m-6 13V7m6 10V7m0 0l-6-3m6 3l6-3"></path></svg>
+                  <h1 class="text-2xl font-bold text-gray-800 dark:text-white">${t('appTitle')}</h1>
+              </div>
+              <div class="flex items-center space-x-4">
+                <button id="language-toggle" class="p-2 w-10 h-10 flex items-center justify-center font-bold text-sm rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Toggle Language">
+                    ${state.language === 'en' ? 'ಕ' : 'EN'}
+                </button>
+                <button id="voice-toggle-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Toggle Voice Feedback">
+                    ${state.isVoiceFeedbackEnabled ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.858 15.858a5 5 0 010-7.072m2.828 9.9a9 9 0 010-12.728M12 12h.01" /></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l4-4m0 4l-4-4" /></svg>'}
+                </button>
+                <button id="qr-code-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Show QR Code"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6.364 1.636l-.707.707M20 12h-1M18.364 18.364l-.707-.707M12 20v-1m-6.364-1.636l.707-.707M4 12h1m1.636-6.364l.707.707" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h1v1H4V4zm2 0h1v1H6V4zm2 0h1v1H8V4zM4 6h1v1H4V6zm2 0h1v1H6V6zm2 0h1v1H8V6zM4 8h1v1H4V8zm2 0h1v1H6V8zm2 0h1v1H8V8z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 12m-3 0a3 3 0 106 0 3 3 0 10-6 0" /></svg></button>
+                <div id="mode-toggle" class="flex items-center cursor-pointer">
+                  <span class="mr-3 font-medium ${!state.isShopkeeperMode ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}">${t('shopper')}</span>
+                  <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                    <input type="checkbox" ${state.isShopkeeperMode ? 'checked' : ''} class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                    <label class="toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${state.isShopkeeperMode ? 'bg-green-400' : 'bg-gray-300'}"></label>
+                  </div>
+                  <span class="font-medium ${state.isShopkeeperMode ? 'text-green-500' : 'text-gray-500 dark:text-gray-400'}">${t('shopkeeper')}</span>
                 </div>
-                <div class="lg:col-span-2 flex flex-col gap-6">
-                    <div id="item-list-container" class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 lg:p-6"></div>
-                    <div id="cart-wrapper" class="hidden">
-                         <div id="cart-container" class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 lg:p-6 sticky bottom-4"></div>
-                    </div>
+              </div>
+            </div>`;
+    };
+
+    const isShopOpen = (openTime, closeTime) => {
+        try {
+            const now = new Date();
+            const parseTime = (timeStr) => {
+                const date = new Date();
+                const [time, period] = timeStr.split(' ');
+                let [hours, minutes] = time.split(':').map(Number);
+                if (period === 'PM' && hours !== 12) hours += 12;
+                if (period === 'AM' && hours === 12) hours = 0;
+                date.setHours(hours, minutes, 0, 0);
+                return date;
+            };
+            const openDate = parseTime(openTime);
+            const closeDate = parseTime(closeTime);
+            if (closeDate < openDate) return now >= openDate || now < closeDate;
+            return now >= openDate && now < closeDate;
+        } catch (e) { return false; }
+    };
+
+    const renderFloorMap = () => {
+        mapTitle.textContent = t('floorMapTitle');
+        const pathData = state.path.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2} ${p.y * GRID_CELL_SIZE + GRID_CELL_SIZE / 2}`).join(' ');
+        
+        mapContainer.innerHTML = `
+            <svg width="100%" viewBox="0 0 ${MAP_WIDTH * GRID_CELL_SIZE} ${MAP_HEIGHT * GRID_CELL_SIZE}" class="bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+              <defs><pattern id="grid" width="${GRID_CELL_SIZE}" height="${GRID_CELL_SIZE}" patternUnits="userSpaceOnUse"><path d="M ${GRID_CELL_SIZE} 0 L 0 0 0 ${GRID_CELL_SIZE}" fill="none" stroke="rgba(229, 231, 235, 0.5)" stroke-width="0.5" /></pattern><pattern id="grid-dark" width="${GRID_CELL_SIZE}" height="${GRID_CELL_SIZE}" patternUnits="userSpaceOnUse"><path d="M ${GRID_CELL_SIZE} 0 L 0 0 0 ${GRID_CELL_SIZE}" fill="none" stroke="rgba(75, 85, 99, 0.5)" stroke-width="0.5" /></pattern></defs>
+              <rect width="100%" height="100%" fill="url(#grid)" class="dark:hidden" /><rect width="100%" height="100%" fill="url(#grid-dark)" class="hidden dark:block" />
+              ${SHOPS.map(shop => {
+                const isCurrentlyOpen = isShopOpen(shop.openTime, shop.closeTime);
+                const isActive = state.activeShopIds.has(shop.id);
+                return `
+                <g class="${!isCurrentlyOpen ? 'opacity-50 grayscale' : ''}">
+                  <title>${shop.name[state.language]}\n${t('hoursLabel')}: ${shop.openTime} - ${shop.closeTime}\n${t('statusLabel')}: ${isCurrentlyOpen ? t('openStatus') : t('closedStatus')}</title>
+                  <rect x="${shop.x * GRID_CELL_SIZE}" y="${shop.y * GRID_CELL_SIZE}" width="${shop.width * GRID_CELL_SIZE}" height="${shop.height * GRID_CELL_SIZE}" class="${shop.color} opacity-70" />
+                  ${isActive ? `<rect x="${shop.x * GRID_CELL_SIZE}" y="${shop.y * GRID_CELL_SIZE}" width="${shop.width * GRID_CELL_SIZE}" height="${shop.height * GRID_CELL_SIZE}" fill="none" stroke="#FBBF24" stroke-width="2.5" />` : ''}
+                  <rect x="${(shop.x + shop.entrance.x) * GRID_CELL_SIZE}" y="${(shop.y + shop.entrance.y) * GRID_CELL_SIZE}" width="${GRID_CELL_SIZE}" height="${GRID_CELL_SIZE}" class="fill-white dark:fill-gray-600" />
+                  <text x="${(shop.x + shop.width / 2) * GRID_CELL_SIZE}" y="${(shop.y + shop.height / 2) * GRID_CELL_SIZE}" text-anchor="middle" alignment-baseline="central" class="text-xs sm:text-sm font-bold fill-current text-gray-800 dark:text-white pointer-events-none">${shop.name[state.language]}</text>
+                </g>`
+              }).join('')}
+              ${pathData ? `<path d="${pathData}" fill="none" stroke="rgb(59 130 246)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="animation: dash 1s linear forwards" stroke-dasharray="1000" stroke-dashoffset="1000" />` : ''}
+              <g transform="translate(${START_POINT.x * GRID_CELL_SIZE}, ${START_POINT.y * GRID_CELL_SIZE})">
+                <circle cx="${GRID_CELL_SIZE/2}" cy="${GRID_CELL_SIZE/2}" r="${GRID_CELL_SIZE*0.75}" class="fill-blue-500 opacity-20" /><circle cx="${GRID_CELL_SIZE/2}" cy="${GRID_CELL_SIZE/2}" r="${GRID_CELL_SIZE*0.4}" class="fill-blue-500" />
+                <text x="${GRID_CELL_SIZE/2}" y="${GRID_CELL_SIZE/2}" text-anchor="middle" alignment-baseline="central" class="text-xs font-bold fill-white">${t('youAreHere')}</text>
+              </g>
+            </svg>`;
+    };
+    
+    const renderItemList = () => {
+        const filteredProducts = !state.isShopkeeperMode && state.searchQuery
+            ? state.products.filter(p => p.name[state.language].toLowerCase().includes(state.searchQuery.toLowerCase()))
+            : state.products;
+
+        const sortedProducts = [...filteredProducts].sort((a, b) => {
+            const valA = state.sortKey === 'name' ? a.name[state.language] : a[state.sortKey];
+            const valB = state.sortKey === 'name' ? b.name[state.language] : b[state.sortKey];
+            let comparison = 0;
+            if (valA > valB) comparison = 1; else if (valA < valB) comparison = -1;
+            return state.sortDirection === 'desc' ? comparison * -1 : comparison;
+        });
+
+        const sortIcon = (key) => state.sortKey !== key ? `<span class="text-gray-400">↕</span>` : (state.sortDirection === 'asc' ? `<span>↑</span>` : `<span>↓</span>`);
+
+        const createItemCardHTML = (product) => {
+            const isSelected = state.selectedProductIds.has(product.id);
+            if (state.isShopkeeperMode) {
+                return `
+                    <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 grid grid-cols-5 gap-2 items-center text-sm" data-product-id="${product.id}">
+                        <span class="col-span-2 font-medium">${product.name[state.language]}</span>
+                        <span class="text-center">$${product.price.toFixed(2)}</span>
+                        <span class="text-center">${product.rating.toFixed(1)} ★</span>
+                        <button data-action="edit" class="bg-blue-500 text-white rounded px-2 py-1 justify-self-end">${t('edit')}</button>
+                    </div>`;
+            }
+            const discountedPrice = product.discount ? product.price * (1 - product.discount / 100) : product.price;
+            return `
+                <div data-action="toggle" data-product-id="${product.id}" class="rounded-lg p-3 grid grid-cols-5 gap-2 items-center cursor-pointer transition-all ${isSelected ? 'bg-blue-100 dark:bg-blue-900 ring-2 ring-blue-500' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'}">
+                    <div class="col-span-2 pointer-events-none"><p class="font-medium text-gray-800 dark:text-white">${product.name[state.language]}</p>${product.discount ? `<span class="text-xs text-green-600 dark:text-green-400">-${product.discount}%</span>` : ''}</div>
+                    <div class="text-center pointer-events-none"><p class="font-semibold ${product.discount ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}">$${discountedPrice.toFixed(2)}</p>${product.discount ? `<p class="text-xs text-gray-500 line-through">$${product.price.toFixed(2)}</p>` : ''}</div>
+                    <div class="text-center text-yellow-500 flex items-center justify-center gap-1 pointer-events-none"><span>${product.rating.toFixed(1)}</span><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>
+                    <div class="flex justify-end pointer-events-none"><input type="checkbox" ${isSelected ? 'checked' : ''} readonly class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>
+                </div>`;
+        };
+
+        const searchBarHTML = !state.isShopkeeperMode ? `
+            <div class="relative mb-4">
+                <div class="flex items-center">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3"><svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></span>
+                    <input type="text" id="search-input" placeholder="${state.isListening ? t('listening') : t('searchPlaceholder')}" value="${state.searchQuery}" class="w-full pl-10 pr-10 py-2 border rounded-lg bg-gray-50 dark:bg-gray-700 dark:border-gray-600"/>
+                    ${recognition ? `<button id="mic-btn" class="absolute inset-y-0 right-0 flex items-center pr-3 rounded-full ${state.isListening ? 'mic-listening' : ''}" aria-label="${t('voiceSearch')}"><svg class="w-5 h-5 ${state.isListening ? 'text-blue-500' : 'text-gray-400'}" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm5 4a1 1 0 11-2 0V4a1 1 0 112 0v4zm-5 5a5 5 0 004.545 4.974V17h-1.5a.5.5 0 000 1h4a.5.5 0 000-1h-1.5v-2.026A5 5 0 0012 9V4a5 5 0 00-10 0v5a5 5 0 005 5z" clip-rule="evenodd" /></svg></button>`: ''}
                 </div>
-            </div>
-        </main>
-        <div id="modal-container"></div>
-    </div>
-    <script src="script.js"></script>
-</body>
-</html>
+            </div>` : '';
+
+        itemListContainer.innerHTML = `
+            <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-gray-700 dark:text-gray-300">${state.isShopkeeperMode ? t('manageProducts') : t('availableItems')}</h2>${state.isShopkeeperMode ? `<button id="add-product-btn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-3 rounded-lg text-sm">${t('addNew')}</button>` : ''}</div>
+            ${searchBarHTML}
+            <div class="grid grid-cols-5 gap-2 text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4"><div class="col-span-2 cursor-pointer" data-sort="name">${t('productColumn')} ${sortIcon('name')}</div><div class="text-center cursor-pointer" data-sort="price">${t('priceColumn')} ${sortIcon('price')}</div><div class="text-center cursor-pointer" data-sort="rating">${t('ratingColumn')} ${sortIcon('rating')}</div><div class="text-right">${state.isShopkeeperMode ? t('actionColumn') : t('selectColumn')}</div></div>
+            <div class="space-y-2 max-h-80 overflow-y-auto pr-2">${sortedProducts.map(createItemCardHTML).join('')}</div>`;
+    };
+
+    const renderCart = () => { 
+        const selectedProducts = state.products.filter(p => state.selectedProductIds.has(p.id));
+        if (selectedProducts.length === 0) { cartWrapper.classList.add('hidden'); return; }
+        cartWrapper.classList.remove('hidden');
+        const totalCost = selectedProducts.reduce((sum, p) => sum + (p.discount ? p.price * (1 - p.discount / 100) : p.price), 0);
+        cartContainer.innerHTML = `
+            <div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold text-gray-700 dark:text-gray-300">${t('yourList')}</h3><button id="clear-cart-btn" class="text-sm text-gray-500 hover:text-red-500">${t('clearAll')}</button></div>
+            <ul class="space-y-1 mb-4 max-h-40 overflow-y-auto pr-2">${selectedProducts.map(p => `<li class="flex justify-between text-sm"><span>${p.name[state.language]}</span><span>$${(p.discount ? p.price * (1 - p.discount / 100) : p.price).toFixed(2)}</span></li>`).join('')}</ul>
+            <div class="border-t pt-3 flex justify-between font-bold"><span>${t('total')}</span><span>$${totalCost.toFixed(2)}</span></div>
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button id="find-route-btn" class="w-full text-white font-semibold py-2 px-4 rounded-lg ${state.path.length > 0 ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600'}">${state.path.length > 0 ? t('routeFound') : t('findRoute')}</button>
+                <button id="checkout-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg">${t('checkout')}</button>
+            </div>`;
+    };
+    
+    const renderModals = () => {
+        const selectedProducts = state.products.filter(p => state.selectedProductIds.has(p.id));
+        const totalCost = selectedProducts.reduce((sum, p) => sum + (p.discount ? p.price * (1 - p.discount / 100) : p.price), 0);
+        const generateQrCodeSvg = () => { const size = 200, boxSize = 10; let path = ''; for (let i = 0; i < size / boxSize; i++) for (let j = 0; j < size / boxSize; j++) if (Math.random() > 0.5) path += `M${i*boxSize},${j*boxSize}h${boxSize}v${boxSize}h-${boxSize}z `; return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect width="${size}" height="${size}" fill="white"/><path d="${path}" fill="black"/></svg>`; };
+        modalContainer.innerHTML = `
+            <div class="modal ${state.isCheckoutModalOpen ? 'is-open' : ''}" data-modal-id="checkout"><div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6 relative" onclick="event.stopPropagation()"><button data-action="close-modal" class="absolute top-4 right-4 text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button><h2 class="text-2xl font-bold text-center mb-2">${t('checkoutTitle')}</h2><p class="text-center text-gray-500 mb-6">${t('checkoutMessage')}</p><div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-6"><div class="flex justify-between mb-2"><span>${t('items')} (${selectedProducts.length})</span><span>$${totalCost.toFixed(2)}</span></div><div class="flex justify-between text-lg font-bold"><span>${t('totalAmount')}</span><span>$${totalCost.toFixed(2)}</span></div></div><div class="text-center"><h3 class="font-semibold mb-3">${t('paymentMethod')}</h3><p class="text-sm text-gray-400 mt-4">${t('paymentPlaceholder')}</p></div><button data-action="close-modal" class="w-full mt-6 bg-indigo-600 text-white font-bold py-3 rounded-lg">${t('confirmPurchase')}</button></div></div>
+            <div class="modal ${state.isQrModalOpen ? 'is-open' : ''}" data-modal-id="qr"><div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-8 relative" onclick="event.stopPropagation()"><button data-action="close-modal" class="absolute top-4 right-4 text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button><h2 class="text-2xl font-bold text-center mb-4">${t('shareTitle')}</h2><div class="flex justify-center mb-4"><div class="p-2 bg-white rounded-lg">${generateQrCodeSvg()}</div></div><p class="text-center text-sm">${t('shareMessage')}</p><input type="text" readonly value="${window.location.href}" class="w-full mt-4 bg-gray-100 text-center text-xs p-2 rounded-lg" onfocus="this.select()" /></div></div>
+            <div class="modal ${state.isAddProductModalOpen ? 'is-open' : ''}" data-modal-id="addProduct"><div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6 relative" onclick="event.stopPropagation()"><button data-action="close-modal" class="absolute top-4 right-4 text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button><h2 class="text-2xl font-bold text-center mb-6">${t('addNewProductTitle')}</h2><form id="add-product-form" class="space-y-4"><div><label class="block text-sm font-medium">${t('productNameLabel')}</label><input type="text" name="name" required class="mt-1 block w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700"></div><div class="grid grid-cols-2 gap-4"><div><label>${t('priceLabel')}</label><input type="number" name="price" step="0.01" required class="mt-1 w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700"></div><div><label>${t('ratingLabel')}</label><input type="number" name="rating" step="0.1" min="1" max="5" required class="mt-1 w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700"></div></div><div class="grid grid-cols-2 gap-4"><div><label>${t('discountLabel')}</label><input type="number" name="discount" min="0" max="100" class="mt-1 w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700"></div><div><label>${t('shopLabel')}</label><select name="shopId" required class="mt-1 w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700">${SHOPS.map(shop => `<option value="${shop.id}">${shop.name[state.language]}</option>`).join('')}</select></div></div><button type="submit" class="w-full mt-6 bg-indigo-600 text-white font-bold py-3 rounded-lg">${t('saveProduct')}</button></form></div></div>`;
+    };
+
+    const render = () => {
+        renderHeader();
+        renderFloorMap();
+        renderItemList();
+        renderCart();
+        renderModals();
+        document.body.classList.toggle('modal-open', state.isCheckoutModalOpen || state.isQrModalOpen || state.isAddProductModalOpen);
+    };
+
+    // --- EVENT HANDLERS ---
+    const handleAddNewProduct = () => { 
+        const form = document.getElementById('add-product-form'); if (!form) return;
+        const formData = new FormData(form);
+        const newProduct = {
+            id: state.products.length > 0 ? Math.max(...state.products.map(p => p.id)) + 1 : 1,
+            name: { en: formData.get('name')?.toString().trim(), kn: formData.get('name')?.toString().trim() }, // Simple duplication for now
+            price: parseFloat(formData.get('price')), rating: parseFloat(formData.get('rating')), shopId: parseInt(formData.get('shopId'), 10),
+            discount: formData.get('discount') ? parseFloat(formData.get('discount')) : undefined,
+        };
+        if (!newProduct.discount) delete newProduct.discount;
+        if (!newProduct.name.en || isNaN(newProduct.price) || isNaN(newProduct.rating) || isNaN(newProduct.shopId)) return;
+        state.products.push(newProduct);
+        handleModal('addProduct', false);
+    };
+    
+    const handleModal = (modal, open) => {
+        if (modal === 'checkout') state.isCheckoutModalOpen = open;
+        if (modal === 'qr') state.isQrModalOpen = open;
+        if (modal === 'addProduct') state.isAddProductModalOpen = open;
+        render();
+    };
+
+    // --- INITIALIZATION ---
+    const setupEventListeners = () => {
+        document.body.addEventListener('click', (e) => {
+            const target = e.target.closest('[data-action], [data-sort], #mode-toggle, #language-toggle, #voice-toggle-btn, #qr-code-btn, #add-product-btn, #mic-btn, #find-route-btn, #clear-cart-btn, #checkout-btn, .modal');
+            if (!target) return;
+
+            // Header
+            if (target.id === 'language-toggle') { state.language = state.language === 'en' ? 'kn' : 'en'; speak(t('appTitle')); render(); }
+            if (target.id === 'voice-toggle-btn') { state.isVoiceFeedbackEnabled = !state.isVoiceFeedbackEnabled; renderHeader(); }
+            if (target.id === 'mode-toggle') { state.isShopkeeperMode = !state.isShopkeeperMode; state.searchQuery = ''; speak(state.isShopkeeperMode ? t('shopkeeperModeOn') : t('shopperModeOn')); render(); }
+            if (target.id === 'qr-code-btn') handleModal('qr', true);
+            if (target.id === 'add-product-btn') handleModal('addProduct', true);
+            
+            // Item List
+            const sortKey = target.dataset.sort;
+            if (sortKey) {
+                if (state.sortKey === sortKey) state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+                else { state.sortKey = sortKey; state.sortDirection = 'asc'; }
+                renderItemList();
+            }
+            if (target.id === 'mic-btn' && recognition) {
+                if (state.isListening) {
+                    recognition.stop();
+                } else {
+                    recognition.lang = state.language === 'en' ? 'en-US' : 'kn-IN';
+                    recognition.start();
+                    state.isListening = true;
+                    renderItemList();
+                }
+            }
+            const itemAction = target.dataset.action;
+            const productId = parseInt(target.closest('[data-product-id]')?.dataset.productId, 10);
+            if (itemAction === 'toggle' && productId) {
+                if (state.selectedProductIds.has(productId)) state.selectedProductIds.delete(productId);
+                else state.selectedProductIds.add(productId);
+                state.path = []; state.activeShopIds.clear();
+                render();
+            }
+            
+            // Cart
+            if (target.id === 'find-route-btn') {
+                const selectedProducts = state.products.filter(p => state.selectedProductIds.has(p.id));
+                const targetShopIds = new Set(selectedProducts.map(p => p.shopId));
+                state.path = dijkstra(START_POINT, SHOPS.filter(s => targetShopIds.has(s.id)));
+                state.activeShopIds = targetShopIds;
+                if (state.path.length > 0) speak(t('routeFound'));
+                render();
+            }
+            if (target.id === 'clear-cart-btn') { state.selectedProductIds.clear(); state.path = []; state.activeShopIds.clear(); speak(t('listCleared')); render(); }
+            if (target.id === 'checkout-btn') {
+                const selectedProducts = state.products.filter(p => state.selectedProductIds.has(p.id));
+                const totalCost = selectedProducts.reduce((sum, p) => sum + (p.discount ? p.price * (1 - p.discount / 100) : p.price), 0);
+                speak(`${t('checkoutTitle')}. ${t('totalAmount')} $${totalCost.toFixed(2)}`);
+                handleModal('checkout', true);
+            }
+
+            // Modals
+            if (itemAction === 'close-modal' || target.classList.contains('modal')) {
+                handleModal(target.closest('.modal').dataset.modalId, false);
+            }
+        });
+        document.body.addEventListener('input', (e) => {
+            if (e.target.id === 'search-input') { state.searchQuery = e.target.value; renderItemList(); }
+        });
+        document.body.addEventListener('submit', (e) => {
+            if (e.target.id === 'add-product-form') { e.preventDefault(); handleAddNewProduct(); }
+        });
+    };
+
+    const init = () => {
+        state.products = JSON.parse(JSON.stringify(INITIAL_PRODUCTS));
+        setupEventListeners();
+        render();
+    };
+
+    init();
+});
