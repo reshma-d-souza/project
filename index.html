@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>In-Store Navigator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
-  <script type="importmap">
+<script type="importmap">
 {
   "imports": {
     "react": "https://aistudiocdn.com/react@^19.2.0",
@@ -17,7 +17,25 @@
 }
 </script>
 </head>
-  <body class="bg-gray-100 dark:bg-gray-900">
-    <div id="root"></div>
-  </body>
+<body class="bg-gray-100 dark:bg-gray-900">
+    <div id="app-container" class="min-h-screen font-sans text-gray-800 dark:text-gray-200">
+        <header id="header-container"></header>
+        <main class="container mx-auto p-4 lg:p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div class="lg:col-span-3 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 lg:p-6 flex flex-col items-center justify-center">
+                    <h2 id="map-title" class="text-xl font-bold mb-4 self-start text-gray-700 dark:text-gray-300"></h2>
+                    <div id="map-container" class="w-full"></div>
+                </div>
+                <div class="lg:col-span-2 flex flex-col gap-6">
+                    <div id="item-list-container" class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 lg:p-6"></div>
+                    <div id="cart-wrapper" class="hidden">
+                         <div id="cart-container" class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 lg:p-6 sticky bottom-4"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <div id="modal-container"></div>
+    </div>
+    <script src="script.js"></script>
+</body>
 </html>
