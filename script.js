@@ -1,9 +1,12 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-
 const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
-// From types.ts
+// --- CONSTANTS ---
+const MAP_WIDTH = 50;
+const MAP_HEIGHT = 70;
+const CELL_SIZE = 12;
+const FLOORS = [0, 1, 2, 3];
+const YOU_ARE_HERE_ID = 'you-are-here';
+
 const Category = {
   Fashion: "Fashion / Apparel",
   Footwear: "Footwear",
@@ -18,46 +21,27 @@ const Category = {
   Amenity: "Amenity",
 };
 
-// From constants.ts
-const MAP_WIDTH = 50;
-const MAP_HEIGHT = 70;
-const CELL_SIZE = 12; // in pixels
-const FLOORS = [0, 1, 2, 3];
-
 const STORES = [
-  // --- FLOOR 0 (Ground Floor) ---
-  // Fashion
   { id: 'levis', name: 'Levi’s', category: Category.Fashion, x: 2, y: 2, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
   { id: 'max', name: 'Max Fashion', category: Category.Fashion, x: 9, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 0 },
   { id: 'westside', name: 'Westside', category: Category.Fashion, x: 18, y: 2, width: 10, height: 5, door: { x: 5, y: 5 }, floor: 0 },
   { id: 'fabindia', name: 'FabIndia', category: Category.Fashion, x: 30, y: 2, width: 7, height: 4, door: { x: 3, y: 4 }, floor: 0 },
   { id: 'biba', name: 'Biba', category: Category.Fashion, x: 38, y: 2, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
-
-  // Footwear
   { id: 'bata', name: 'Bata', category: Category.Footwear, x: 2, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
   { id: 'nike', name: 'Nike', category: Category.Footwear, x: 9, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
   { id: 'puma', name: 'Puma', category: Category.Footwear, x: 16, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
-  
-  // Electronics
   { id: 'croma', name: 'Croma', category: Category.Electronics, x: 2, y: 35, width: 12, height: 6, door: { x: 6, y: 0 }, floor: 0 },
   { id: 'reliance', name: 'Reliance Digital', category: Category.Electronics, x: 15, y: 35, width: 12, height: 6, door: { x: 6, y: 0 }, floor: 0 },
-
-  // Food
   { id: 'kfc', name: 'KFC', category: Category.Food, x: 2, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 0 },
   { id: 'mcdonalds', name: 'McDonald’s', category: Category.Food, x: 8, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 0 },
   { id: 'dominos', name: 'Domino’s', category: Category.Food, x: 14, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 0 },
   { id: 'pizzahut', name: 'Pizza Hut', category: Category.Food, x: 20, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 0 },
-  
-  // Amenities (Floor 0)
   { id: 'entrance', name: 'Entrance/Exit', category: Category.Amenity, x: 22, y: 68, width: 6, height: 2, door: { x: 3, y: 0 }, floor: 0 },
   { id: 'washroom-m-0', name: 'Washroom (Men)', category: Category.Amenity, x: 44, y: 35, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 0 },
   { id: 'washroom-w-0', name: 'Washroom (Women)', category: Category.Amenity, x: 44, y: 39, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 0 },
   { id: 'escalator-up-0', name: 'Escalator (Up to 1F)', category: Category.Amenity, x: 2, y: 29, width: 3, height: 3, door: { x: 1, y: 3 }, floor: 0, linksTo: { x: 2, y: 29, floor: 1 } },
   { id: 'stairs-up-0', name: 'Stairs (Up to 1F)', category: Category.Amenity, x: 44, y: 50, width: 4, height: 4, door: { x: 0, y: 2 }, floor: 0, linksTo: { x: 44, y: 50, floor: 1 } },
   { id: 'office', name: 'Store Office', category: Category.Services, x: 44, y: 65, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 0 },
-
-  // --- FLOOR 1 (First Floor) ---
-  // Fashion
   { id: 'raymond', name: 'Raymond', category: Category.Fashion, x: 2, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
   { id: 'allen-solly', name: 'Allen Solly', category: Category.Fashion, x: 9, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
   { id: 'van-heusen', name: 'Van Heusen', category: Category.Fashion, x: 16, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
@@ -65,80 +49,50 @@ const STORES = [
   { id: 'global-desi', name: 'Global Desi', category: Category.Fashion, x: 30, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
   { id: 'w-for-women', name: 'W for Women', category: Category.Fashion, x: 37, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
   { id: 'arrow', name: 'Arrow', category: Category.Fashion, x: 44, y: 15, width: 4, height: 4, door: { x: 2, y: 0 }, floor: 1 },
-  
-  // Footwear
   { id: 'metro', name: 'Metro Shoes', category: Category.Footwear, x: 23, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
   { id: 'woodland', name: 'Woodland', category: Category.Footwear, x: 30, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
   { id: 'skechers', name: 'Skechers', category: Category.Footwear, x: 37, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
-
-  // Electronics
   { id: 'samsung', name: 'Samsung', category: Category.Electronics, x: 28, y: 35, width: 8, height: 6, door: { x: 4, y: 0 }, floor: 1 },
-
-  // Watches
   { id: 'titan', name: 'Titan World', category: Category.Watches, x: 2, y: 44, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
   { id: 'tanishq', name: 'Tanishq', category: Category.Watches, x: 9, y: 44, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 1 },
   { id: 'casio', name: 'Casio', category: Category.Watches, x: 18, y: 44, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
-
-  // Food
   { id: 'ideal', name: 'Ideal Ice Cream', category: Category.Food, x: 26, y: 60, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
   { id: 'subway', name: 'Subway', category: Category.Food, x: 33, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 1 },
-
-  // Amenities (Floor 1)
   { id: 'washroom-m-1', name: 'Washroom (Men)', category: Category.Amenity, x: 44, y: 35, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 1 },
   { id: 'washroom-w-1', name: 'Washroom (Women)', category: Category.Amenity, x: 44, y: 39, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 1 },
   { id: 'escalator-down-1', name: 'Escalator (Down to GF)', category: Category.Amenity, x: 2, y: 29, width: 3, height: 3, door: { x: 1, y: 0 }, floor: 1, linksTo: { x: 2, y: 29, floor: 0 } },
   { id: 'escalator-up-1', name: 'Escalator (Up to 2F)', category: Category.Amenity, x: 6, y: 29, width: 3, height: 3, door: { x: 1, y: 3 }, floor: 1, linksTo: { x: 6, y: 29, floor: 2 } },
   { id: 'stairs-down-1', name: 'Stairs (Down to GF)', category: Category.Amenity, x: 44, y: 50, width: 2, height: 4, door: { x: 0, y: 2 }, floor: 1, linksTo: { x: 44, y: 50, floor: 0 } },
   { id: 'stairs-up-1', name: 'Stairs (Up to 2F)', category: Category.Amenity, x: 46, y: 50, width: 2, height: 4, door: { x: 2, y: 2 }, floor: 1, linksTo: { x: 44, y: 50, floor: 2 } },
-
-  // --- FLOOR 2 (Second Floor) ---
-  // Beauty
   { id: 'bodyshop', name: 'The Body Shop', category: Category.Beauty, x: 2, y: 2, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 2 },
   { id: 'lush', name: 'Lush', category: Category.Beauty, x: 9, y: 2, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 2 },
   { id: 'nykaa', name: 'Nykaa', category: Category.Beauty, x: 16, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 2 },
   { id: 'loreal', name: 'L’Oréal Paris', category: Category.Beauty, x: 25, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 2 },
-
-  // Home & Decor
   { id: 'homecentre', name: 'Home Centre', category: Category.Home, x: 2, y: 35, width: 12, height: 6, door: { x: 6, y: 0 }, floor: 2 },
   { id: 'poshlighting', name: 'Posh Lighting', category: Category.Home, x: 15, y: 35, width: 10, height: 6, door: { x: 5, y: 0 }, floor: 2 },
   { id: 'iris', name: 'Iris', category: Category.Home, x: 26, y: 35, width: 8, height: 6, door: { x: 4, y: 0 }, floor: 2 },
-
-  // Books & Stationery
   { id: 'crossword', name: 'Crossword', category: Category.Books, x: 30, y: 15, width: 10, height: 5, door: { x: 5, y: 0 }, floor: 2 },
   { id: 'sapna', name: 'Sapna Book House', category: Category.Books, x: 30, y: 22, width: 10, height: 5, door: { x: 5, y: 5 }, floor: 2 },
-  
-  // Amenities (Floor 2)
   { id: 'washroom-m-2', name: 'Washroom (Men)', category: Category.Amenity, x: 44, y: 35, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 2 },
   { id: 'washroom-w-2', name: 'Washroom (Women)', category: Category.Amenity, x: 44, y: 39, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 2 },
   { id: 'escalator-down-2', name: 'Escalator (Down to 1F)', category: Category.Amenity, x: 2, y: 29, width: 3, height: 3, door: { x: 1, y: 0 }, floor: 2, linksTo: { x: 2, y: 29, floor: 1 } },
   { id: 'escalator-up-2', name: 'Escalator (Up to 3F)', category: Category.Amenity, x: 6, y: 29, width: 3, height: 3, door: { x: 1, y: 3 }, floor: 2, linksTo: { x: 6, y: 29, floor: 3 } },
   { id: 'stairs-down-2', name: 'Stairs (Down to 1F)', category: Category.Amenity, x: 44, y: 50, width: 2, height: 4, door: { x: 0, y: 2 }, floor: 2, linksTo: { x: 44, y: 50, floor: 1 } },
   { id: 'stairs-up-2', name: 'Stairs (Up to 3F)', category: Category.Amenity, x: 46, y: 50, width: 2, height: 4, door: { x: 2, y: 2 }, floor: 2, linksTo: { x: 44, y: 50, floor: 3 } },
-  
-  // --- FLOOR 3 (Third Floor) ---
-  // Sports & Travel
   { id: 'planetsports', name: 'Planet Sports', category: Category.Sports, x: 2, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 3 },
   { id: 'wildcraft', name: 'Wildcraft', category: Category.Sports, x: 11, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 3 },
   { id: 'samsonite', name: 'Samsonite', category: Category.Sports, x: 2, y: 10, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
   { id: 'vip', name: 'VIP', category: Category.Sports, x: 11, y: 10, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
-
-  // Watches & Jewellery
   { id: 'dw', name: 'Daniel Wellington', category: Category.Watches, x: 22, y: 2, width: 7, height: 4, door: { x: 3, y: 4 }, floor: 3 },
   { id: 'parakat', name: 'Parakat Jewels', category: Category.Watches, x: 30, y: 2, width: 7, height: 4, door: { x: 3, y: 4 }, floor: 3 },
-
-  // Food Court
   { id: 'punjabdihaandi', name: 'Punjab Di Haandi', category: Category.Food, x: 2, y: 60, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
   { id: 'pokketcafe', name: 'Pokket Café', category: Category.Food, x: 11, y: 60, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
   { id: 'greenonion', name: 'Green Onion', category: Category.Food, x: 20, y: 60, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
-
-  // Amenities (Floor 3)
   { id: 'washroom-m-3', name: 'Washroom (Men)', category: Category.Amenity, x: 44, y: 35, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 3 },
   { id: 'washroom-w-3', name: 'Washroom (Women)', category: Category.Amenity, x: 44, y: 39, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 3 },
   { id: 'escalator-down-3', name: 'Escalator (Down to 2F)', category: Category.Amenity, x: 2, y: 29, width: 3, height: 3, door: { x: 1, y: 0 }, floor: 3, linksTo: { x: 2, y: 29, floor: 2 } },
   { id: 'stairs-down-3', name: 'Stairs (Down to 2F)', category: Category.Amenity, x: 44, y: 50, width: 4, height: 4, door: { x: 0, y: 2 }, floor: 3, linksTo: { x: 44, y: 50, floor: 2 } },
 ];
-
-const YOU_ARE_HERE_ID = 'you-are-here';
 
 const TRANSLATIONS = {
   title: { en: 'Mall Navigator Pro', kn: 'ಮಾಲ್ ನ್ಯಾವಿಗೇಟರ್ ಪ್ರೊ' },
@@ -163,7 +117,6 @@ const TRANSLATIONS = {
   firstFloor: { en: 'First Floor', kn: 'ಮೊದಲ ಮಹಡಿ' },
   secondFloor: { en: 'Second Floor', kn: 'ಎರಡನೇ ಮಹಡಿ' },
   thirdFloor: { en: 'Third Floor', kn: 'ಮೂರನೇ ಮಹಡಿ' },
-  // Voice navigation prompts
   walkForward: { en: 'Walk forward', kn: 'ಮುಂದೆ ನಡೆಯಿರಿ' },
   turnLeft: { en: 'Turn left', kn: 'ಎಡಕ್ಕೆ ತಿರುಗಿ' },
   turnRight: { en: 'Turn right', kn: 'ಬಲಕ್ಕೆ ತಿರುಗಿ' },
@@ -178,20 +131,17 @@ const TRANSLATIONS = {
   takeStairsTo: { en: 'Take the stairs to the {floorName}', kn: 'ಮೆಟ್ಟಿಲುಗಳ ಮೂಲಕ {floorName}ಗೆ ಹೋಗಿ' },
 };
 
-// From services/pathfinding.ts
+// --- PATHFINDING SERVICE ---
 const findPath = (() => {
-  const createGridsAndConnectors = () => {
+  const { grids, connectors } = (() => {
     const grids = {};
     const connectors = new Map();
-
     FLOORS.forEach(floor => {
       grids[floor] = Array.from({ length: MAP_HEIGHT }, () => Array(MAP_WIDTH).fill(true));
     });
-
     STORES.forEach(store => {
       const grid = grids[store.floor];
       if (!grid) return;
-
       for (let y = store.y; y < store.y + store.height; y++) {
         for (let x = store.x; x < store.x + store.width; x++) {
           if (x >= 0 && x < MAP_WIDTH && y >= 0 && y < MAP_HEIGHT) {
@@ -204,96 +154,73 @@ const findPath = (() => {
       if (doorX >= 0 && doorX < MAP_WIDTH && doorY >= 0 && doorY < MAP_HEIGHT) {
         grid[doorY][doorX] = true;
       }
-
       if (store.linksTo) {
         const startPoint = { x: store.x + store.door.x, y: store.y + store.door.y, floor: store.floor };
         connectors.set(`${startPoint.x},${startPoint.y},${startPoint.floor}`, store.linksTo);
       }
     });
-
     return { grids, connectors };
-  };
+  })();
 
-  const { grids, connectors } = createGridsAndConnectors();
-
-  const isPointValid = (p) => {
-      return grids[p.floor]?.[p.y]?.[p.x] ?? false;
-  }
+  const isPointValid = (p) => grids[p.floor]?.[p.y]?.[p.x] ?? false;
 
   return (start, end) => {
-    if (!isPointValid(start) || !isPointValid(end)) {
-      return null;
-    }
-
+    if (!isPointValid(start) || !isPointValid(end)) return null;
     const queue = [start];
     const cameFrom = new Map();
     const startKey = `${start.x},${start.y},${start.floor}`;
     const visited = new Set([startKey]);
     cameFrom.set(startKey, null);
-
-    const directions = [
-      { x: 0, y: 1, floor: 0 },
-      { x: 0, y: -1, floor: 0 },
-      { x: 1, y: 0, floor: 0 },
-      { x: -1, y: 0, floor: 0 },
-    ];
+    const directions = [{ x: 0, y: 1 }, { x: 0, y: -1 }, { x: 1, y: 0 }, { x: -1, y: 0 }];
 
     while (queue.length > 0) {
       const current = queue.shift();
-
       if (current.x === end.x && current.y === end.y && current.floor === end.floor) {
         const path = [];
         let temp = current;
         while (temp) {
           path.unshift(temp);
-          const tempKey = `${temp.x},${temp.y},${temp.floor}`;
-          temp = cameFrom.get(tempKey);
+          temp = cameFrom.get(`${temp.x},${temp.y},${temp.floor}`);
         }
         return path;
       }
-
       for (const dir of directions) {
         const next = { x: current.x + dir.x, y: current.y + dir.y, floor: current.floor };
         const nextKey = `${next.x},${next.y},${next.floor}`;
-
         if (isPointValid(next) && !visited.has(nextKey)) {
           visited.add(nextKey);
           cameFrom.set(nextKey, current);
           queue.push(next);
         }
       }
-
       const currentKey = `${current.x},${current.y},${current.floor}`;
       if (connectors.has(currentKey)) {
-          const next = connectors.get(currentKey);
-          const nextKey = `${next.x},${next.y},${next.floor}`;
-          if (!visited.has(nextKey)) {
-              visited.add(nextKey);
-              cameFrom.set(nextKey, current);
-              queue.push(next);
-          }
+        const next = connectors.get(currentKey);
+        const nextKey = `${next.x},${next.y},${next.floor}`;
+        if (!visited.has(nextKey)) {
+          visited.add(nextKey);
+          cameFrom.set(nextKey, current);
+          queue.push(next);
+        }
       }
     }
-
     return null;
   };
 })();
 
+// --- REACT COMPONENTS ---
 
-// From components/StoreMap.tsx
 const StoreMap = ({ stores, path, startPoint, destinations, onMapClick, selectedStoreId }) => {
   const destinationIds = new Set(destinations.map(d => d.id));
-
   const getCellColor = (store) => {
     if (selectedStoreId === store.id) return 'bg-blue-400 dark:bg-blue-600';
     if (destinationIds.has(store.id)) return 'bg-yellow-400 dark:bg-yellow-600';
-    
     switch (store.category) {
-      case 'Fashion / Apparel': return 'bg-pink-200 dark:bg-pink-800';
-      case 'Footwear': return 'bg-indigo-200 dark:bg-indigo-800';
-      case 'Electronics / Gadgets': return 'bg-sky-200 dark:bg-sky-800';
-      case 'Food / Restaurants': return 'bg-orange-200 dark:bg-orange-800';
-      case 'Amenity': return 'bg-teal-200 dark:bg-teal-800';
+      case Category.Fashion: return 'bg-pink-200 dark:bg-pink-800';
+      case Category.Footwear: return 'bg-indigo-200 dark:bg-indigo-800';
+      case Category.Electronics: return 'bg-sky-200 dark:bg-sky-800';
+      case Category.Food: return 'bg-orange-200 dark:bg-orange-800';
+      case Category.Amenity: return 'bg-teal-200 dark:bg-teal-800';
       default: return 'bg-slate-200 dark:bg-slate-700';
     }
   };
@@ -366,7 +293,6 @@ const StoreMap = ({ stores, path, startPoint, destinations, onMapClick, selected
   );
 };
 
-// From components/ControlPanel.tsx
 const ControlPanel = ({
   language, setLanguage, isShopkeeperMode, setIsShopkeeperMode,
   shopkeeperStoreId, setShopkeeperStoreId, startPointId, setStartPointId,
@@ -375,7 +301,6 @@ const ControlPanel = ({
 }) => {
   const t = (key) => TRANSLATIONS[key][language];
   const [searchTerm, setSearchTerm] = useState('');
-
   const storesByFloor = useMemo(() => 
     STORES.reduce((acc, store) => {
       const floor = store.floor;
@@ -384,31 +309,18 @@ const ControlPanel = ({
       return acc;
     }, {})
   , []);
-
-  const filteredStores = useMemo(() =>
-    STORES.filter(store =>
-      store.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ), [searchTerm]);
-
+  const filteredStores = useMemo(() => STORES.filter(store => store.name.toLowerCase().includes(searchTerm.toLowerCase())), [searchTerm]);
   const handleDestinationChange = (store) => {
-    setDestinations(
-      destinations.some(d => d.id === store.id)
-        ? destinations.filter(d => d.id !== store.id)
-        : [...destinations, store]
-    );
+    setDestinations(destinations.some(d => d.id === store.id) ? destinations.filter(d => d.id !== store.id) : [...destinations, store]);
   };
-  
   const destinationIds = new Set(destinations.map(d => d.id));
-
   const floorName = (floor) => {
-    switch(floor) {
-      case 0: return t('groundFloor');
-      case 1: return t('firstFloor');
-      case 2: return t('secondFloor');
-      case 3: return t('thirdFloor');
-      default: return '';
-    }
-  }
+    if (floor === 0) return t('groundFloor');
+    if (floor === 1) return t('firstFloor');
+    if (floor === 2) return t('secondFloor');
+    if (floor === 3) return t('thirdFloor');
+    return '';
+  };
 
   return (
     <div className="w-full md:w-96 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col space-y-4">
@@ -419,12 +331,10 @@ const ControlPanel = ({
           <button onClick={() => setLanguage('kn')} className={`px-2 py-1 text-sm rounded ${language === 'kn' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>ಕ</button>
         </div>
       </div>
-      
       <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
         <button onClick={() => setIsShopkeeperMode(false)} className={`w-1/2 py-2 text-sm font-medium rounded-md transition-colors ${!isShopkeeperMode ? 'bg-white dark:bg-gray-800 shadow text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-300'}`}>{t('customerMode')}</button>
         <button onClick={() => setIsShopkeeperMode(true)} className={`w-1/2 py-2 text-sm font-medium rounded-md transition-colors ${isShopkeeperMode ? 'bg-white dark:bg-gray-800 shadow text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-300'}`}>{t('shopkeeperMode')}</button>
       </div>
-
       {isShopkeeperMode ? (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('yourStore')}</label>
@@ -440,11 +350,7 @@ const ControlPanel = ({
       ) : (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('currentLocation')}</label>
-           <select 
-            value={startPointId || ''} 
-            onChange={(e) => setStartPointId(e.target.value)} 
-            className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600"
-          >
+          <select value={startPointId || ''} onChange={(e) => setStartPointId(e.target.value)} className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
             <option value={YOU_ARE_HERE_ID}>{t('youAreHere')} (Click on Map)</option>
             {Object.entries(storesByFloor).map(([floor, stores]) => (
               <optgroup key={floor} label={floorName(Number(floor))}>
@@ -454,12 +360,9 @@ const ControlPanel = ({
           </select>
         </div>
       )}
-
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('destination')}</label>
-        <div className="relative">
-          <input type="text" placeholder={t('searchStore')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600" />
-        </div>
+        <div className="relative"><input type="text" placeholder={t('searchStore')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600" /></div>
         <div className="max-h-48 overflow-y-auto mt-2 space-y-1 pr-2">
           {filteredStores.map(store => (
             <div key={store.id} className="flex items-center">
@@ -469,92 +372,68 @@ const ControlPanel = ({
           ))}
         </div>
       </div>
-      
       <div className="grid grid-cols-2 gap-2">
         <button onClick={onGetDirections} className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition-colors">{t('getDirections')}</button>
         <button onClick={onClearRoute} className="w-full bg-gray-500 text-white p-2 rounded-md hover:bg-gray-600 transition-colors">{t('clearRoute')}</button>
       </div>
-
-      <button
-        onClick={onToggleVoiceNavigation}
-        className={`w-full p-2 rounded-md transition-colors ${isNavigating ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white`}
-        disabled={destinations.length === 0}
-      >
+      <button onClick={onToggleVoiceNavigation} className={`w-full p-2 rounded-md transition-colors ${isNavigating ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white`} disabled={destinations.length === 0}>
         {isNavigating ? t('stopNavigation') : t('startNavigation')}
       </button>
-
     </div>
   );
 };
 
-// From App.tsx
 const App = () => {
   const [language, setLanguage] = useState('en');
   const [isShopkeeperMode, setIsShopkeeperMode] = useState(false);
   const [shopkeeperStoreId, setShopkeeperStoreId] = useState(null);
-  
   const [startPoint, setStartPoint] = useState(null);
   const [startPointId, setStartPointId] = useState(null);
   const [destinations, setDestinations] = useState([]);
   const [path, setPath] = useState(null);
-  
   const [isNavigating, setIsNavigating] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedStoreId, setSelectedStoreId] = useState(null);
   const [currentFloor, setCurrentFloor] = useState(0);
-  
   const utteranceRef = useRef(null);
 
   const t = useCallback((key, replacements) => {
     let text = TRANSLATIONS[key]?.[language] || key;
     if (replacements) {
-        Object.entries(replacements).forEach(([k, v]) => {
-            text = text.replace(`{${k}}`, v);
-        });
+      Object.entries(replacements).forEach(([k, v]) => {
+        text = text.replace(`{${k}}`, v);
+      });
     }
     return text;
   }, [language]);
   
   const floorName = useCallback((floor) => {
-    switch(floor) {
-      case 0: return t('groundFloor');
-      case 1: return t('firstFloor');
-      case 2: return t('secondFloor');
-      case 3: return t('thirdFloor');
-      default: return '';
-    }
+    if (floor === 0) return t('groundFloor');
+    if (floor === 1) return t('firstFloor');
+    if (floor === 2) return t('secondFloor');
+    if (floor === 3) return t('thirdFloor');
+    return '';
   }, [t]);
 
   useEffect(() => {
     const getStoreDoorPoint = (storeId) => {
-        const store = STORES.find(s => s.id === storeId);
-        if (store) {
-          return { x: store.x + store.door.x, y: store.y + store.door.y, floor: store.floor };
-        }
-        return null;
-    }
-
+      const store = STORES.find(s => s.id === storeId);
+      return store ? { x: store.x + store.door.x, y: store.y + store.door.y, floor: store.floor } : null;
+    };
     if (isShopkeeperMode) {
-      if (shopkeeperStoreId) {
-        setStartPoint(getStoreDoorPoint(shopkeeperStoreId));
-        setStartPointId(shopkeeperStoreId);
-      } else {
-        setStartPoint(null);
-        setStartPointId(null);
-      }
+      setStartPoint(shopkeeperStoreId ? getStoreDoorPoint(shopkeeperStoreId) : null);
+      setStartPointId(shopkeeperStoreId);
     } else {
-        if(startPointId && startPointId !== YOU_ARE_HERE_ID) {
-            setStartPoint(getStoreDoorPoint(startPointId));
-        } else if (!startPointId) {
-            setStartPoint(null);
-        }
+      if (startPointId && startPointId !== YOU_ARE_HERE_ID) {
+        setStartPoint(getStoreDoorPoint(startPointId));
+      } else if (!startPointId) {
+        setStartPoint(null);
+      }
     }
   }, [isShopkeeperMode, shopkeeperStoreId, startPointId]);
 
   useEffect(() => {
-    if (startPoint) {
-      setCurrentFloor(startPoint.floor);
-    }
+    if (startPoint) setCurrentFloor(startPoint.floor);
   }, [startPoint]);
 
   const handleMapClick = (point) => {
@@ -574,14 +453,11 @@ const App = () => {
       showMessage(t('selectStartAndDest'));
       return;
     }
-
     let fullPath = [];
     let currentStart = startPoint;
     let pathFound = true;
-    
-    const sortedDestinations = [...destinations].sort((a,b) => a.floor - b.floor);
-
-    for (const dest of sortedDestinations) {
+    const sortedDests = [...destinations].sort((a,b) => a.floor - b.floor);
+    for (const dest of sortedDests) {
       const destPoint = { x: dest.x + dest.door.x, y: dest.y + dest.door.y, floor: dest.floor };
       const segment = findPath(currentStart, destPoint);
       if (segment) {
@@ -592,14 +468,17 @@ const App = () => {
         break;
       }
     }
-
-    if (pathFound) {
-      setPath(fullPath);
-    } else {
+    if (pathFound) setPath(fullPath);
+    else {
       setPath(null);
       showMessage(t('routeNotFound'));
     }
   }, [startPoint, destinations, t]);
+
+  const stopVoiceNavigation = () => {
+    window.speechSynthesis.cancel();
+    setIsNavigating(false);
+  };
 
   const handleClearRoute = useCallback(() => {
     setPath(null);
@@ -614,63 +493,44 @@ const App = () => {
   
   const generateDirections = useCallback(() => {
     if (!path || path.length < 2) return [];
-
     const directions = [];
     let currentPos = 0;
     const destPoints = new Map(destinations.map(d => [`${d.x+d.door.x},${d.y+d.door.y},${d.floor}`, d.name]));
-
     while (currentPos < path.length - 1) {
-        const currentPoint = path[currentPos];
-        const nextPoint = path[currentPos + 1];
-
-        if (currentPoint.floor !== nextPoint.floor) {
-            const connector = STORES.find(s => s.x <= currentPoint.x && s.x + s.width > currentPoint.x && s.y <= currentPoint.y && s.y + s.height > currentPoint.y && s.floor === currentPoint.floor && s.linksTo);
-            const toFloorName = floorName(nextPoint.floor);
-            if (connector) {
-                if (connector.name.toLowerCase().includes('escalator')) {
-                    if (nextPoint.floor > currentPoint.floor) {
-                        directions.push(t('takeEscalatorUp', {floorName: toFloorName}));
-                    } else {
-                        directions.push(t('takeEscalatorDown', {floorName: toFloorName}));
-                    }
-                } else if (connector.name.toLowerCase().includes('stairs')) {
-                    directions.push(t('takeStairsTo', {floorName: toFloorName}));
-                }
-            }
-            currentPos++;
-            continue;
+      const currentPoint = path[currentPos];
+      const nextPoint = path[currentPos + 1];
+      if (currentPoint.floor !== nextPoint.floor) {
+        const connector = STORES.find(s => s.x <= currentPoint.x && s.x + s.width > currentPoint.x && s.y <= currentPoint.y && s.y + s.height > currentPoint.y && s.floor === currentPoint.floor && s.linksTo);
+        const toFloorName = floorName(nextPoint.floor);
+        if (connector) {
+          if (connector.name.toLowerCase().includes('escalator')) {
+            directions.push(t(nextPoint.floor > currentPoint.floor ? 'takeEscalatorUp' : 'takeEscalatorDown', {floorName: toFloorName}));
+          } else if (connector.name.toLowerCase().includes('stairs')) {
+            directions.push(t('takeStairsTo', {floorName: toFloorName}));
+          }
         }
-
-        let dx = nextPoint.x - currentPoint.x;
-        let dy = nextPoint.y - currentPoint.y;
-        
-        let steps = 0;
-        while (currentPos + steps + 1 < path.length &&
-               path[currentPos + steps + 1].floor === currentPoint.floor &&
-               path[currentPos + steps + 1].x - path[currentPos + steps].x === dx &&
-               path[currentPos + steps + 1].y - path[currentPos + steps].y === dy) {
-            steps++;
-        }
-
-        if (steps > 0) {
-            if (dx === 1) directions.push(t('turnRight') + ', ' + t('walkForward') + ` ${steps} ` + t('steps'));
-            else if (dx === -1) directions.push(t('turnLeft') + ', ' + t('walkForward') + ` ${steps} ` + t('steps'));
-            else if (dy === 1) directions.push(t('walkForward') + ` ${steps} ` + t('steps'));
-            else if (dy === -1) directions.push(t('walkForward') + ` ${steps} ` + t('steps'));
-        }
-        
-        currentPos += steps;
-
-        const destKey = `${path[currentPos].x},${path[currentPos].y},${path[currentPos].floor}`;
-        if (destPoints.has(destKey)) {
-            const destName = destPoints.get(destKey);
-            directions.push(t('youHaveArrived', {destination: destName}));
-            destPoints.delete(destKey);
-        }
+        currentPos++;
+        continue;
+      }
+      let dx = nextPoint.x - currentPoint.x, dy = nextPoint.y - currentPoint.y;
+      let steps = 0;
+      while (currentPos + steps + 1 < path.length && path[currentPos + steps + 1].floor === currentPoint.floor && path[currentPos + steps + 1].x - path[currentPos + steps].x === dx && path[currentPos + steps + 1].y - path[currentPos + steps].y === dy) {
+        steps++;
+      }
+      if (steps > 0) {
+        if (dx === 1) directions.push(`${t('turnRight')}, ${t('walkForward')} ${steps} ${t('steps')}`);
+        else if (dx === -1) directions.push(`${t('turnLeft')}, ${t('walkForward')} ${steps} ${t('steps')}`);
+        else if (dy === 1) directions.push(`${t('walkForward')} ${steps} ${t('steps')}`);
+        else if (dy === -1) directions.push(`${t('walkForward')} ${steps} ${t('steps')}`);
+      }
+      currentPos += steps;
+      const destKey = `${path[currentPos].x},${path[currentPos].y},${path[currentPos].floor}`;
+      if (destPoints.has(destKey)) {
+        directions.push(t('youHaveArrived', {destination: destPoints.get(destKey)}));
+        destPoints.delete(destKey);
+      }
     }
-    if (destinations.length > 0) {
-      directions.push(t('navigationComplete'));
-    }
+    if (destinations.length > 0) directions.push(t('navigationComplete'));
     return directions;
   }, [path, destinations, t, floorName]);
 
@@ -682,37 +542,26 @@ const App = () => {
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
   };
-  
-  const stopVoiceNavigation = () => {
-      window.speechSynthesis.cancel();
-      setIsNavigating(false);
-  }
 
   const startVoiceNavigation = useCallback(() => {
     if (!path) return;
     setIsNavigating(true);
     const directions = generateDirections();
     let currentStep = 0;
-
     const speakNext = () => {
       if (currentStep < directions.length) {
         speak(directions[currentStep], () => {
           currentStep++;
           speakNext();
         });
-      } else {
-        setIsNavigating(false);
-      }
+      } else setIsNavigating(false);
     };
     speakNext();
   }, [path, generateDirections, language]);
 
   const handleToggleVoiceNavigation = () => {
-    if (isNavigating) {
-      stopVoiceNavigation();
-    } else {
-      startVoiceNavigation();
-    }
+    if (isNavigating) stopVoiceNavigation();
+    else startVoiceNavigation();
   };
 
   const visibleStores = useMemo(() => STORES.filter(s => s.floor === currentFloor), [currentFloor]);
@@ -735,11 +584,7 @@ const App = () => {
       <div className="flex flex-col items-center justify-center gap-2">
         <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 p-1 rounded-lg shadow">
           {FLOORS.map(floor => (
-              <button
-                key={floor}
-                onClick={() => setCurrentFloor(floor)}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${currentFloor === floor ? 'bg-blue-500 text-white shadow-inner' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
-              >
+              <button key={floor} onClick={() => setCurrentFloor(floor)} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${currentFloor === floor ? 'bg-blue-500 text-white shadow-inner' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
                   {floorName(floor)}
               </button>
           ))}
@@ -764,14 +609,7 @@ const App = () => {
   );
 };
 
-// From index.tsx
+// --- RENDER APP ---
 const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+root.render(<App />);
