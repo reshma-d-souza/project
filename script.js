@@ -1,512 +1,777 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // --- STATE ---
-    const state = {
-        isShopkeeperMode: false,
-        products: [],
-        selectedProductIds: new Set(),
-        path: [],
-        isCheckoutModalOpen: false,
-        isQrModalOpen: false,
-        isAddProductModalOpen: false,
-        sortKey: 'name',
-        sortDirection: 'asc',
-    };
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 
-    // --- CONSTANTS & DATA ---
-    const MAP_WIDTH = 40;
-    const MAP_HEIGHT = 30;
-    const GRID_CELL_SIZE = 16;
-    const START_POINT = { x: 2, y: 15 };
+const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
-    const SHOPS = [
-        { id: 1, name: 'Fresh Produce', x: 3, y: 3, width: 8, height: 6, entrance: { x: 4, y: 6 }, color: 'bg-green-200 dark:bg-green-800' },
-        { id: 2, name: 'Bakery', x: 14, y: 3, width: 6, height: 8, entrance: { x: 3, y: 8 }, color: 'bg-yellow-200 dark:bg-yellow-800' },
-        { id: 3, name: 'Dairy & Cheese', x: 23, y: 3, width: 10, height: 5, entrance: { x: 5, y: 5 }, color: 'bg-blue-200 dark:bg-blue-800' },
-        { id: 4, name: 'Butcher Shop', x: 3, y: 18, width: 7, height: 7, entrance: { x: 3, y: 0 }, color: 'bg-red-200 dark:bg-red-800' },
-        { id: 5, name: 'Frozen Foods', x: 13, y: 18, width: 12, height: 6, entrance: { x: 6, y: 0 }, color: 'bg-cyan-200 dark:bg-cyan-800' },
-        { id: 6, name: 'Checkout', x: 30, y: 16, width: 7, height: 10, entrance: { x: 0, y: 5 }, color: 'bg-purple-200 dark:bg-purple-800' },
-        { id: 7, name: 'Washroom', x: 1, y: 11, width: 4, height: 4, entrance: { x: 4, y: 2 }, color: 'bg-gray-200 dark:bg-gray-600' },
-        { id: 8, name: 'Mall Office', x: 30, y: 10, width: 7, height: 4, entrance: { x: 0, y: 2 }, color: 'bg-slate-200 dark:bg-slate-700' },
-    ];
+// From types.ts
+const Category = {
+  Fashion: "Fashion / Apparel",
+  Footwear: "Footwear",
+  Electronics: "Electronics / Gadgets",
+  Watches: "Watches / Jewellery",
+  Beauty: "Beauty / Health",
+  Home: "Home & Decor",
+  Books: "Books / Stationery",
+  Sports: "Sports / Travel",
+  Food: "Food / Restaurants",
+  Services: "Services",
+  Amenity: "Amenity",
+};
 
-    const INITIAL_PRODUCTS = [
-        { id: 1, name: 'Organic Apples', price: 3.50, rating: 4.8, shopId: 1, discount: 10 },
-        { id: 2, name: 'Avocados', price: 1.75, rating: 4.9, shopId: 1 },
-        { id: 3, name: 'Sourdough Bread', price: 5.20, rating: 4.7, shopId: 2 },
-        { id: 4, name: 'Croissants', price: 2.50, rating: 4.6, shopId: 2 },
-        { id: 5, name: 'Cheddar Cheese', price: 8.00, rating: 4.5, shopId: 3 },
-        { id: 6, name: 'Whole Milk (1L)', price: 2.10, rating: 4.4, shopId: 3 },
-        { id: 7, name: 'Organic Greek Yogurt', price: 4.50, rating: 4.8, shopId: 3, discount: 15 },
-        { id: 8, name: 'Ribeye Steak (lb)', price: 15.99, rating: 5.0, shopId: 4 },
-        { id: 9, name: 'Ground Beef (lb)', price: 6.50, rating: 4.3, shopId: 4 },
-        { id: 10, name: 'Frozen Pizza', price: 7.99, rating: 4.1, shopId: 5 },
-        { id: 11, name: 'Mixed Berries (frozen)', price: 6.25, rating: 4.7, shopId: 5 },
-        { id: 12, name: 'Ice Cream Tub', price: 5.50, rating: 4.9, shopId: 5 },
-    ];
+// From constants.ts
+const MAP_WIDTH = 50;
+const MAP_HEIGHT = 70;
+const CELL_SIZE = 12; // in pixels
+const FLOORS = [0, 1, 2, 3];
 
-    // --- DOM Elements ---
-    const headerContainer = document.getElementById('header-container');
-    const mapContainer = document.getElementById('map-container');
-    const itemListContainer = document.getElementById('item-list-container');
-    const cartWrapper = document.getElementById('cart-wrapper');
-    const cartContainer = document.getElementById('cart-container');
-    const modalContainer = document.getElementById('modal-container');
+const STORES = [
+  // --- FLOOR 0 (Ground Floor) ---
+  // Fashion
+  { id: 'levis', name: 'Levi’s', category: Category.Fashion, x: 2, y: 2, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
+  { id: 'max', name: 'Max Fashion', category: Category.Fashion, x: 9, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 0 },
+  { id: 'westside', name: 'Westside', category: Category.Fashion, x: 18, y: 2, width: 10, height: 5, door: { x: 5, y: 5 }, floor: 0 },
+  { id: 'fabindia', name: 'FabIndia', category: Category.Fashion, x: 30, y: 2, width: 7, height: 4, door: { x: 3, y: 4 }, floor: 0 },
+  { id: 'biba', name: 'Biba', category: Category.Fashion, x: 38, y: 2, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
 
-    // --- DIJKSTRA'S ALGORITHM ---
-    class PriorityQueue {
-        constructor() { this.nodes = []; }
-        enqueue(point, priority) { this.nodes.push({ point, priority }); this.sort(); }
-        dequeue() { return this.nodes.shift()?.point || null; }
-        isEmpty() { return !this.nodes.length; }
-        sort() { this.nodes.sort((a, b) => a.priority - b.priority); }
+  // Footwear
+  { id: 'bata', name: 'Bata', category: Category.Footwear, x: 2, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
+  { id: 'nike', name: 'Nike', category: Category.Footwear, x: 9, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
+  { id: 'puma', name: 'Puma', category: Category.Footwear, x: 16, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 0 },
+  
+  // Electronics
+  { id: 'croma', name: 'Croma', category: Category.Electronics, x: 2, y: 35, width: 12, height: 6, door: { x: 6, y: 0 }, floor: 0 },
+  { id: 'reliance', name: 'Reliance Digital', category: Category.Electronics, x: 15, y: 35, width: 12, height: 6, door: { x: 6, y: 0 }, floor: 0 },
+
+  // Food
+  { id: 'kfc', name: 'KFC', category: Category.Food, x: 2, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 0 },
+  { id: 'mcdonalds', name: 'McDonald’s', category: Category.Food, x: 8, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 0 },
+  { id: 'dominos', name: 'Domino’s', category: Category.Food, x: 14, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 0 },
+  { id: 'pizzahut', name: 'Pizza Hut', category: Category.Food, x: 20, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 0 },
+  
+  // Amenities (Floor 0)
+  { id: 'entrance', name: 'Entrance/Exit', category: Category.Amenity, x: 22, y: 68, width: 6, height: 2, door: { x: 3, y: 0 }, floor: 0 },
+  { id: 'washroom-m-0', name: 'Washroom (Men)', category: Category.Amenity, x: 44, y: 35, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 0 },
+  { id: 'washroom-w-0', name: 'Washroom (Women)', category: Category.Amenity, x: 44, y: 39, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 0 },
+  { id: 'escalator-up-0', name: 'Escalator (Up to 1F)', category: Category.Amenity, x: 2, y: 29, width: 3, height: 3, door: { x: 1, y: 3 }, floor: 0, linksTo: { x: 2, y: 29, floor: 1 } },
+  { id: 'stairs-up-0', name: 'Stairs (Up to 1F)', category: Category.Amenity, x: 44, y: 50, width: 4, height: 4, door: { x: 0, y: 2 }, floor: 0, linksTo: { x: 44, y: 50, floor: 1 } },
+  { id: 'office', name: 'Store Office', category: Category.Services, x: 44, y: 65, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 0 },
+
+  // --- FLOOR 1 (First Floor) ---
+  // Fashion
+  { id: 'raymond', name: 'Raymond', category: Category.Fashion, x: 2, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
+  { id: 'allen-solly', name: 'Allen Solly', category: Category.Fashion, x: 9, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
+  { id: 'van-heusen', name: 'Van Heusen', category: Category.Fashion, x: 16, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
+  { id: 'peter-england', name: 'Peter England', category: Category.Fashion, x: 23, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
+  { id: 'global-desi', name: 'Global Desi', category: Category.Fashion, x: 30, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
+  { id: 'w-for-women', name: 'W for Women', category: Category.Fashion, x: 37, y: 15, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
+  { id: 'arrow', name: 'Arrow', category: Category.Fashion, x: 44, y: 15, width: 4, height: 4, door: { x: 2, y: 0 }, floor: 1 },
+  
+  // Footwear
+  { id: 'metro', name: 'Metro Shoes', category: Category.Footwear, x: 23, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
+  { id: 'woodland', name: 'Woodland', category: Category.Footwear, x: 30, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
+  { id: 'skechers', name: 'Skechers', category: Category.Footwear, x: 37, y: 22, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
+
+  // Electronics
+  { id: 'samsung', name: 'Samsung', category: Category.Electronics, x: 28, y: 35, width: 8, height: 6, door: { x: 4, y: 0 }, floor: 1 },
+
+  // Watches
+  { id: 'titan', name: 'Titan World', category: Category.Watches, x: 2, y: 44, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
+  { id: 'tanishq', name: 'Tanishq', category: Category.Watches, x: 9, y: 44, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 1 },
+  { id: 'casio', name: 'Casio', category: Category.Watches, x: 18, y: 44, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 1 },
+
+  // Food
+  { id: 'ideal', name: 'Ideal Ice Cream', category: Category.Food, x: 26, y: 60, width: 6, height: 4, door: { x: 3, y: 0 }, floor: 1 },
+  { id: 'subway', name: 'Subway', category: Category.Food, x: 33, y: 60, width: 5, height: 4, door: { x: 2, y: 0 }, floor: 1 },
+
+  // Amenities (Floor 1)
+  { id: 'washroom-m-1', name: 'Washroom (Men)', category: Category.Amenity, x: 44, y: 35, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 1 },
+  { id: 'washroom-w-1', name: 'Washroom (Women)', category: Category.Amenity, x: 44, y: 39, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 1 },
+  { id: 'escalator-down-1', name: 'Escalator (Down to GF)', category: Category.Amenity, x: 2, y: 29, width: 3, height: 3, door: { x: 1, y: 0 }, floor: 1, linksTo: { x: 2, y: 29, floor: 0 } },
+  { id: 'escalator-up-1', name: 'Escalator (Up to 2F)', category: Category.Amenity, x: 6, y: 29, width: 3, height: 3, door: { x: 1, y: 3 }, floor: 1, linksTo: { x: 6, y: 29, floor: 2 } },
+  { id: 'stairs-down-1', name: 'Stairs (Down to GF)', category: Category.Amenity, x: 44, y: 50, width: 2, height: 4, door: { x: 0, y: 2 }, floor: 1, linksTo: { x: 44, y: 50, floor: 0 } },
+  { id: 'stairs-up-1', name: 'Stairs (Up to 2F)', category: Category.Amenity, x: 46, y: 50, width: 2, height: 4, door: { x: 2, y: 2 }, floor: 1, linksTo: { x: 44, y: 50, floor: 2 } },
+
+  // --- FLOOR 2 (Second Floor) ---
+  // Beauty
+  { id: 'bodyshop', name: 'The Body Shop', category: Category.Beauty, x: 2, y: 2, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 2 },
+  { id: 'lush', name: 'Lush', category: Category.Beauty, x: 9, y: 2, width: 6, height: 4, door: { x: 3, y: 4 }, floor: 2 },
+  { id: 'nykaa', name: 'Nykaa', category: Category.Beauty, x: 16, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 2 },
+  { id: 'loreal', name: 'L’Oréal Paris', category: Category.Beauty, x: 25, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 2 },
+
+  // Home & Decor
+  { id: 'homecentre', name: 'Home Centre', category: Category.Home, x: 2, y: 35, width: 12, height: 6, door: { x: 6, y: 0 }, floor: 2 },
+  { id: 'poshlighting', name: 'Posh Lighting', category: Category.Home, x: 15, y: 35, width: 10, height: 6, door: { x: 5, y: 0 }, floor: 2 },
+  { id: 'iris', name: 'Iris', category: Category.Home, x: 26, y: 35, width: 8, height: 6, door: { x: 4, y: 0 }, floor: 2 },
+
+  // Books & Stationery
+  { id: 'crossword', name: 'Crossword', category: Category.Books, x: 30, y: 15, width: 10, height: 5, door: { x: 5, y: 0 }, floor: 2 },
+  { id: 'sapna', name: 'Sapna Book House', category: Category.Books, x: 30, y: 22, width: 10, height: 5, door: { x: 5, y: 5 }, floor: 2 },
+  
+  // Amenities (Floor 2)
+  { id: 'washroom-m-2', name: 'Washroom (Men)', category: Category.Amenity, x: 44, y: 35, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 2 },
+  { id: 'washroom-w-2', name: 'Washroom (Women)', category: Category.Amenity, x: 44, y: 39, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 2 },
+  { id: 'escalator-down-2', name: 'Escalator (Down to 1F)', category: Category.Amenity, x: 2, y: 29, width: 3, height: 3, door: { x: 1, y: 0 }, floor: 2, linksTo: { x: 2, y: 29, floor: 1 } },
+  { id: 'escalator-up-2', name: 'Escalator (Up to 3F)', category: Category.Amenity, x: 6, y: 29, width: 3, height: 3, door: { x: 1, y: 3 }, floor: 2, linksTo: { x: 6, y: 29, floor: 3 } },
+  { id: 'stairs-down-2', name: 'Stairs (Down to 1F)', category: Category.Amenity, x: 44, y: 50, width: 2, height: 4, door: { x: 0, y: 2 }, floor: 2, linksTo: { x: 44, y: 50, floor: 1 } },
+  { id: 'stairs-up-2', name: 'Stairs (Up to 3F)', category: Category.Amenity, x: 46, y: 50, width: 2, height: 4, door: { x: 2, y: 2 }, floor: 2, linksTo: { x: 44, y: 50, floor: 3 } },
+  
+  // --- FLOOR 3 (Third Floor) ---
+  // Sports & Travel
+  { id: 'planetsports', name: 'Planet Sports', category: Category.Sports, x: 2, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 3 },
+  { id: 'wildcraft', name: 'Wildcraft', category: Category.Sports, x: 11, y: 2, width: 8, height: 4, door: { x: 4, y: 4 }, floor: 3 },
+  { id: 'samsonite', name: 'Samsonite', category: Category.Sports, x: 2, y: 10, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
+  { id: 'vip', name: 'VIP', category: Category.Sports, x: 11, y: 10, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
+
+  // Watches & Jewellery
+  { id: 'dw', name: 'Daniel Wellington', category: Category.Watches, x: 22, y: 2, width: 7, height: 4, door: { x: 3, y: 4 }, floor: 3 },
+  { id: 'parakat', name: 'Parakat Jewels', category: Category.Watches, x: 30, y: 2, width: 7, height: 4, door: { x: 3, y: 4 }, floor: 3 },
+
+  // Food Court
+  { id: 'punjabdihaandi', name: 'Punjab Di Haandi', category: Category.Food, x: 2, y: 60, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
+  { id: 'pokketcafe', name: 'Pokket Café', category: Category.Food, x: 11, y: 60, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
+  { id: 'greenonion', name: 'Green Onion', category: Category.Food, x: 20, y: 60, width: 8, height: 4, door: { x: 4, y: 0 }, floor: 3 },
+
+  // Amenities (Floor 3)
+  { id: 'washroom-m-3', name: 'Washroom (Men)', category: Category.Amenity, x: 44, y: 35, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 3 },
+  { id: 'washroom-w-3', name: 'Washroom (Women)', category: Category.Amenity, x: 44, y: 39, width: 4, height: 3, door: { x: 0, y: 1 }, floor: 3 },
+  { id: 'escalator-down-3', name: 'Escalator (Down to 2F)', category: Category.Amenity, x: 2, y: 29, width: 3, height: 3, door: { x: 1, y: 0 }, floor: 3, linksTo: { x: 2, y: 29, floor: 2 } },
+  { id: 'stairs-down-3', name: 'Stairs (Down to 2F)', category: Category.Amenity, x: 44, y: 50, width: 4, height: 4, door: { x: 0, y: 2 }, floor: 3, linksTo: { x: 44, y: 50, floor: 2 } },
+];
+
+const YOU_ARE_HERE_ID = 'you-are-here';
+
+const TRANSLATIONS = {
+  title: { en: 'Mall Navigator Pro', kn: 'ಮಾಲ್ ನ್ಯಾವಿಗೇಟರ್ ಪ್ರೊ' },
+  shopkeeperMode: { en: 'Shopkeeper Mode', kn: 'ಅಂಗಡಿಯವನ ಮೋಡ್' },
+  yourStore: { en: 'Your Store', kn: 'ನಿಮ್ಮ ಅಂಗಡಿ' },
+  selectYourStore: { en: 'Select your store', kn: 'ನಿಮ್ಮ ಅಂಗಡಿ ಆಯ್ಕೆಮಾಡಿ' },
+  customerMode: { en: 'Customer Mode', kn: 'ಗ್ರಾಹಕ ಮೋಡ್' },
+  currentLocation: { en: 'Current Location', kn: 'ಪ್ರಸ್ತುತ ಸ್ಥಳ' },
+  youAreHere: { en: 'You are here', kn: 'ನೀವು ಇಲ್ಲಿದ್ದೀರಿ' },
+  destination: { en: 'Destination(s)', kn: 'ಗಮ್ಯಸ್ಥಾನ(ಗಳು)' },
+  selectDestination: { en: 'Select destination(s)', kn: 'ಗಮ್ಯಸ್ಥಾನ(ಗಳನ್ನು) ಆಯ್ಕೆಮಾಡಿ' },
+  searchStore: { en: 'Search for a store...', kn: 'ಅಂಗಡಿಗಾಗಿ ಹುಡುಕಿ...' },
+  getDirections: { en: 'Get Directions', kn: 'ಮಾರ್ಗ ಪಡೆಯಿರಿ' },
+  clearRoute: { en: 'Clear Route', kn: 'ಮಾರ್ಗ ತೆರವುಗೊಳಿಸಿ' },
+  startNavigation: { en: 'Start Voice Navigation', kn: 'ಧ್ವನಿ ಸಂಚರಣೆ ಪ್ರಾರಂಭಿಸಿ' },
+  stopNavigation: { en: 'Stop Voice Navigation', kn: 'ಧ್ವನಿ ಸಂಚರಣೆ ನಿಲ್ಲಿಸಿ' },
+  routeCleared: { en: 'Route cleared.', kn: 'ಮಾರ್ಗ ತೆರವುಗೊಳಿಸಲಾಗಿದೆ.' },
+  calculatingRoute: { en: 'Calculating route...', kn: 'ಮಾರ್ಗವನ್ನು ಲೆಕ್ಕಹಾಕಲಾಗುತ್ತಿದೆ...' },
+  routeNotFound: { en: 'Route not found.', kn: 'ಮಾರ್ಗ ಕಂಡುಬಂದಿಲ್ಲ.' },
+  selectStartAndDest: { en: 'Please select a starting point and at least one destination.', kn: 'ದಯವಿಟ್ಟು ಆರಂಭಿಕ ಸ್ಥಳ ಮತ್ತು ಕನಿಷ್ಠ ಒಂದು ಗಮ್ಯಸ್ಥಾನವನ್ನು ಆಯ್ಕೆಮಾಡಿ.' },
+  groundFloor: { en: 'Ground Floor', kn: 'ನೆಲ ಮಹಡಿ' },
+  firstFloor: { en: 'First Floor', kn: 'ಮೊದಲ ಮಹಡಿ' },
+  secondFloor: { en: 'Second Floor', kn: 'ಎರಡನೇ ಮಹಡಿ' },
+  thirdFloor: { en: 'Third Floor', kn: 'ಮೂರನೇ ಮಹಡಿ' },
+  // Voice navigation prompts
+  walkForward: { en: 'Walk forward', kn: 'ಮುಂದೆ ನಡೆಯಿರಿ' },
+  turnLeft: { en: 'Turn left', kn: 'ಎಡಕ್ಕೆ ತಿರುಗಿ' },
+  turnRight: { en: 'Turn right', kn: 'ಬಲಕ್ಕೆ ತಿರುಗಿ' },
+  steps: { en: 'steps', kn: 'ಹೆಜ್ಜೆಗಳು' },
+  destinationOnLeft: { en: 'Your destination, {destination}, is on your left.', kn: 'ನಿಮ್ಮ ಗಮ್ಯಸ್ಥಾನ, {destination}, ನಿಮ್ಮ ಎಡಭಾಗದಲ್ಲಿದೆ.' },
+  destinationOnRight: { en: 'Your destination, {destination}, is on your right.', kn: 'ನಿಮ್ಮ ಗಮ್ಯಸ್ಥಾನ, {destination}, ನಿಮ್ಮ ಬಲಭಾಗದಲ್ಲಿದೆ.' },
+  youHaveArrived: { en: 'You have arrived at {destination}.', kn: 'ನೀವು {destination} ಗೆ ತಲುಪಿದ್ದೀರಿ.' },
+  nextDestination: { en: 'Continuing to next destination, {destination}.', kn: 'ಮುಂದಿನ ಗಮ್ಯಸ್ಥಾನ, {destination}, ಕ್ಕೆ ಮುಂದುವರಿಯಲಾಗುತ್ತಿದೆ.' },
+  navigationComplete: { en: 'You have reached your final destination. Navigation complete.', kn: 'ನೀವು ನಿಮ್ಮ ಅಂತಿಮ ಗಮ್ಯಸ್ಥಾನವನ್ನು ತಲುಪಿದ್ದೀರಿ. ಸಂಚರಣೆ ಪೂರ್ಣಗೊಂಡಿದೆ.' },
+  takeEscalatorUp: { en: 'Take the escalator up to the {floorName}', kn: '{floorName}ಗೆ ಎಸ್ಕಲೇಟರ್ ಮೂಲಕ ಹೋಗಿ' },
+  takeEscalatorDown: { en: 'Take the escalator down to the {floorName}', kn: '{floorName}ಗೆ ಎಸ್ಕಲೇಟರ್ ಮೂಲಕ ಕೆಳಗೆ ಹೋಗಿ' },
+  takeStairsTo: { en: 'Take the stairs to the {floorName}', kn: 'ಮೆಟ್ಟಿಲುಗಳ ಮೂಲಕ {floorName}ಗೆ ಹೋಗಿ' },
+};
+
+// From services/pathfinding.ts
+const findPath = (() => {
+  const createGridsAndConnectors = () => {
+    const grids = {};
+    const connectors = new Map();
+
+    FLOORS.forEach(floor => {
+      grids[floor] = Array.from({ length: MAP_HEIGHT }, () => Array(MAP_WIDTH).fill(true));
+    });
+
+    STORES.forEach(store => {
+      const grid = grids[store.floor];
+      if (!grid) return;
+
+      for (let y = store.y; y < store.y + store.height; y++) {
+        for (let x = store.x; x < store.x + store.width; x++) {
+          if (x >= 0 && x < MAP_WIDTH && y >= 0 && y < MAP_HEIGHT) {
+            grid[y][x] = false;
+          }
+        }
+      }
+      const doorX = store.x + store.door.x;
+      const doorY = store.y + store.door.y;
+      if (doorX >= 0 && doorX < MAP_WIDTH && doorY >= 0 && doorY < MAP_HEIGHT) {
+        grid[doorY][doorX] = true;
+      }
+
+      if (store.linksTo) {
+        const startPoint = { x: store.x + store.door.x, y: store.y + store.door.y, floor: store.floor };
+        connectors.set(`${startPoint.x},${startPoint.y},${startPoint.floor}`, store.linksTo);
+      }
+    });
+
+    return { grids, connectors };
+  };
+
+  const { grids, connectors } = createGridsAndConnectors();
+
+  const isPointValid = (p) => {
+      return grids[p.floor]?.[p.y]?.[p.x] ?? false;
+  }
+
+  return (start, end) => {
+    if (!isPointValid(start) || !isPointValid(end)) {
+      return null;
     }
 
-    const dijkstra = (() => {
-        const grid = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(1));
-        SHOPS.forEach(shop => {
-            for (let y = shop.y; y < shop.y + shop.height; y++) {
-                for (let x = shop.x; x < shop.x + shop.width; x++) {
-                    grid[y][x] = 0;
-                }
-            }
-            grid[shop.y + shop.entrance.y][shop.x + shop.entrance.x] = 1;
-        });
+    const queue = [start];
+    const cameFrom = new Map();
+    const startKey = `${start.x},${start.y},${start.floor}`;
+    const visited = new Set([startKey]);
+    cameFrom.set(startKey, null);
 
-        const findPath = (start, end) => {
-            const distances = {};
-            const previous = {};
-            const pq = new PriorityQueue();
-            const path = [];
-            
-            for (let y = 0; y < MAP_HEIGHT; y++) {
-                for (let x = 0; x < MAP_WIDTH; x++) {
-                    const key = `${x},${y}`;
-                    distances[key] = (x === start.x && y === start.y) ? 0 : Infinity;
-                    previous[key] = null;
-                }
-            }
-            pq.enqueue(start, 0);
+    const directions = [
+      { x: 0, y: 1, floor: 0 },
+      { x: 0, y: -1, floor: 0 },
+      { x: 1, y: 0, floor: 0 },
+      { x: -1, y: 0, floor: 0 },
+    ];
 
-            while (!pq.isEmpty()) {
-                const smallest = pq.dequeue();
-                if (!smallest) break;
+    while (queue.length > 0) {
+      const current = queue.shift();
 
-                if (smallest.x === end.x && smallest.y === end.y) {
-                    let currentKey = `${end.x},${y}`;
-                    while (previous[currentKey]) {
-                        const [x, y] = currentKey.split(',').map(Number);
-                        path.unshift({ x, y });
-                        currentKey = previous[currentKey];
-                    }
-                    path.unshift(start);
-                    break;
-                }
+      if (current.x === end.x && current.y === end.y && current.floor === end.floor) {
+        const path = [];
+        let temp = current;
+        while (temp) {
+          path.unshift(temp);
+          const tempKey = `${temp.x},${temp.y},${temp.floor}`;
+          temp = cameFrom.get(tempKey);
+        }
+        return path;
+      }
 
-                const neighbors = [
-                    { x: smallest.x + 1, y: smallest.y }, { x: smallest.x - 1, y: smallest.y },
-                    { x: smallest.x, y: smallest.y + 1 }, { x: smallest.x, y: smallest.y - 1 },
-                ];
+      for (const dir of directions) {
+        const next = { x: current.x + dir.x, y: current.y + dir.y, floor: current.floor };
+        const nextKey = `${next.x},${next.y},${next.floor}`;
 
-                for (const neighbor of neighbors) {
-                    if (neighbor.x >= 0 && neighbor.x < MAP_WIDTH && neighbor.y >= 0 && neighbor.y < MAP_HEIGHT && grid[neighbor.y][neighbor.x] === 1) {
-                        const smallestKey = `${smallest.x},${smallest.y}`;
-                        const neighborKey = `${neighbor.x},${neighbor.y}`;
-                        const candidate = distances[smallestKey] + 1;
-                        if (candidate < distances[neighborKey]) {
-                            distances[neighborKey] = candidate;
-                            previous[neighborKey] = smallestKey;
-                            pq.enqueue(neighbor, candidate);
-                        }
-                    }
-                }
-            }
-            return path;
-        };
+        if (isPointValid(next) && !visited.has(nextKey)) {
+          visited.add(nextKey);
+          cameFrom.set(nextKey, current);
+          queue.push(next);
+        }
+      }
 
-        return (start, targets) => {
-            if (!targets.length) return [];
-            let fullPath = [];
-            let currentStart = start;
-            let remainingTargets = [...targets];
+      const currentKey = `${current.x},${current.y},${current.floor}`;
+      if (connectors.has(currentKey)) {
+          const next = connectors.get(currentKey);
+          const nextKey = `${next.x},${next.y},${next.floor}`;
+          if (!visited.has(nextKey)) {
+              visited.add(nextKey);
+              cameFrom.set(nextKey, current);
+              queue.push(next);
+          }
+      }
+    }
 
-            while (remainingTargets.length > 0) {
-                let nearestTarget = null;
-                let shortestDist = Infinity;
-                for (const target of remainingTargets) {
-                    const dist = Math.hypot(target.x + target.entrance.x - currentStart.x, target.y + target.entrance.y - currentStart.y);
-                    if (dist < shortestDist) {
-                        shortestDist = dist;
-                        nearestTarget = target;
-                    }
-                }
-                if (nearestTarget) {
-                    const targetPoint = { x: nearestTarget.x + nearestTarget.entrance.x, y: nearestTarget.y + nearestTarget.entrance.y };
-                    const segment = findPath(currentStart, targetPoint);
-                    if (segment.length > 0) {
-                        fullPath = fullPath.concat(segment.slice(1));
-                        currentStart = targetPoint;
-                    }
-                    remainingTargets = remainingTargets.filter(t => t.id !== nearestTarget.id);
-                } else { break; }
-            }
-            if (fullPath.length > 0) fullPath.unshift(start);
-            return fullPath;
-        };
-    })();
+    return null;
+  };
+})();
 
-    // --- RENDER FUNCTIONS ---
-    const renderHeader = () => {
-        headerContainer.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 shadow-md">
-              <div class="container mx-auto px-4 lg:px-6 py-4 flex justify-between items-center">
-                <div class="flex items-center gap-3">
-                    <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 16.382V5.618a1 1 0 00-1.447-.894L15 7m-6 13V7m6 10V7m0 0l-6-3m6 3l6-3"></path></svg>
-                    <h1 class="text-2xl font-bold text-gray-800 dark:text-white">In-Store Navigator</h1>
-                </div>
-                <div class="flex items-center space-x-4">
-                  <button id="qr-code-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Show QR Code">
-                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6.364 1.636l-.707.707M20 12h-1M18.364 18.364l-.707-.707M12 20v-1m-6.364-1.636l.707-.707M4 12h1m1.636-6.364l.707.707" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h1v1H4V4zm2 0h1v1H6V4zm2 0h1v1H8V4zM4 6h1v1H4V6zm2 0h1v1H6V6zm2 0h1v1H8V6zM4 8h1v1H4V8zm2 0h1v1H6V8zm2 0h1v1H8V8z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 12m-3 0a3 3 0 106 0 3 3 0 10-6 0" /></svg>
-                  </button>
-                  <div id="mode-toggle" class="flex items-center cursor-pointer">
-                    <span class="mr-3 font-medium ${!state.isShopkeeperMode ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}">Shopper</span>
-                    <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                      <input type="checkbox" ${state.isShopkeeperMode ? 'checked' : ''} class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
-                      <label class="toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${state.isShopkeeperMode ? 'bg-green-400' : 'bg-gray-300'}"></label>
-                    </div>
-                    <span class="font-medium ${state.isShopkeeperMode ? 'text-green-500' : 'text-gray-500 dark:text-gray-400'}">Shopkeeper</span>
-                  </div>
-                </div>
-              </div>
-            </div>`;
-    };
 
-    const renderFloorMap = () => {
-        const pathData = state.path.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2} ${p.y * GRID_CELL_SIZE + GRID_CELL_SIZE / 2}`).join(' ');
-        
-        mapContainer.innerHTML = `
-            <svg width="100%" viewBox="0 0 ${MAP_WIDTH * GRID_CELL_SIZE} ${MAP_HEIGHT * GRID_CELL_SIZE}" class="bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-              <defs>
-                <pattern id="grid" width="${GRID_CELL_SIZE}" height="${GRID_CELL_SIZE}" patternUnits="userSpaceOnUse"><path d="M ${GRID_CELL_SIZE} 0 L 0 0 0 ${GRID_CELL_SIZE}" fill="none" stroke="rgba(229, 231, 235, 0.5)" stroke-width="0.5" /></pattern>
-                <pattern id="grid-dark" width="${GRID_CELL_SIZE}" height="${GRID_CELL_SIZE}" patternUnits="userSpaceOnUse"><path d="M ${GRID_CELL_SIZE} 0 L 0 0 0 ${GRID_CELL_SIZE}" fill="none" stroke="rgba(75, 85, 99, 0.5)" stroke-width="0.5" /></pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" class="dark:hidden" /><rect width="100%" height="100%" fill="url(#grid-dark)" class="hidden dark:block" />
-              ${SHOPS.map(shop => `
-                <g>
-                  <rect x="${shop.x * GRID_CELL_SIZE}" y="${shop.y * GRID_CELL_SIZE}" width="${shop.width * GRID_CELL_SIZE}" height="${shop.height * GRID_CELL_SIZE}" class="${shop.color} opacity-70" />
-                  <rect x="${(shop.x + shop.entrance.x) * GRID_CELL_SIZE}" y="${(shop.y + shop.entrance.y) * GRID_CELL_SIZE}" width="${GRID_CELL_SIZE}" height="${GRID_CELL_SIZE}" class="fill-white dark:fill-gray-600" />
-                  <text x="${(shop.x + shop.width / 2) * GRID_CELL_SIZE}" y="${(shop.y + shop.height / 2) * GRID_CELL_SIZE}" text-anchor="middle" alignment-baseline="central" class="text-xs sm:text-sm font-bold fill-current text-gray-800 dark:text-white pointer-events-none">${shop.name}</text>
-                </g>`).join('')}
-              ${pathData ? `<path d="${pathData}" fill="none" stroke="rgb(59 130 246)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="animation: dash 1s linear forwards" stroke-dasharray="1000" stroke-dashoffset="1000" />` : ''}
-              <g transform="translate(${START_POINT.x * GRID_CELL_SIZE}, ${START_POINT.y * GRID_CELL_SIZE})">
-                <circle cx="${GRID_CELL_SIZE/2}" cy="${GRID_CELL_SIZE/2}" r="${GRID_CELL_SIZE*0.75}" class="fill-blue-500 opacity-20" />
-                <circle cx="${GRID_CELL_SIZE/2}" cy="${GRID_CELL_SIZE/2}" r="${GRID_CELL_SIZE*0.4}" class="fill-blue-500" />
-                <text x="${GRID_CELL_SIZE/2}" y="${GRID_CELL_SIZE/2}" text-anchor="middle" alignment-baseline="central" class="text-xs font-bold fill-white">You</text>
-              </g>
-            </svg>`;
-    };
+// From components/StoreMap.tsx
+const StoreMap = ({ stores, path, startPoint, destinations, onMapClick, selectedStoreId }) => {
+  const destinationIds = new Set(destinations.map(d => d.id));
 
-    const renderItemList = () => {
-        const sortedProducts = [...state.products].sort((a, b) => {
-            let comparison = 0;
-            if (a[state.sortKey] > b[state.sortKey]) comparison = 1;
-            else if (a[state.sortKey] < b[state.sortKey]) comparison = -1;
-            return state.sortDirection === 'desc' ? comparison * -1 : comparison;
-        });
-
-        const sortIcon = (key) => {
-            if (state.sortKey !== key) return `<span class="text-gray-400">↕</span>`;
-            return state.sortDirection === 'asc' ? `<span>↑</span>` : `<span>↓</span>`;
-        };
-
-        const createItemCardHTML = (product) => {
-            const isSelected = state.selectedProductIds.has(product.id);
-            if (state.isShopkeeperMode) {
-                return `
-                    <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 grid grid-cols-5 gap-2 items-center text-sm" data-product-id="${product.id}">
-                        <span class="col-span-2 font-medium">${product.name}</span>
-                        <span class="text-center">$${product.price.toFixed(2)}</span>
-                        <span class="text-center">${product.rating.toFixed(1)} ★</span>
-                        <button data-action="edit" class="bg-blue-500 text-white rounded px-2 py-1 justify-self-end">Edit</button>
-                    </div>`;
-            }
-            const discountedPrice = product.discount ? product.price * (1 - product.discount / 100) : product.price;
-            return `
-                <div data-action="toggle" data-product-id="${product.id}" class="rounded-lg p-3 grid grid-cols-5 gap-2 items-center cursor-pointer transition-all ${isSelected ? 'bg-blue-100 dark:bg-blue-900 ring-2 ring-blue-500' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'}">
-                    <div class="col-span-2 pointer-events-none">
-                        <p class="font-medium text-gray-800 dark:text-white">${product.name}</p>
-                        ${product.discount ? `<span class="text-xs text-green-600 dark:text-green-400">-${product.discount}%</span>` : ''}
-                    </div>
-                    <div class="text-center pointer-events-none">
-                        <p class="font-semibold ${product.discount ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}">$${discountedPrice.toFixed(2)}</p>
-                        ${product.discount ? `<p class="text-xs text-gray-500 line-through">$${product.price.toFixed(2)}</p>` : ''}
-                    </div>
-                    <div class="text-center text-yellow-500 flex items-center justify-center gap-1 pointer-events-none">
-                        <span>${product.rating.toFixed(1)}</span>
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                    </div>
-                    <div class="flex justify-end pointer-events-none">
-                        <input type="checkbox" ${isSelected ? 'checked' : ''} readonly class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
-                    </div>
-                </div>`;
-        };
-
-        itemListContainer.innerHTML = `
-            <div class="flex justify-between items-center mb-4">
-              <h2 class="text-xl font-bold text-gray-700 dark:text-gray-300">${state.isShopkeeperMode ? 'Manage Products' : 'Available Items'}</h2>
-              ${state.isShopkeeperMode ? `<button id="add-product-btn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-3 rounded-lg text-sm transition-transform transform hover:scale-105">Add New</button>` : ''}
-            </div>
-            <div class="grid grid-cols-5 gap-2 text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 px-4">
-                <div class="col-span-2 cursor-pointer" data-sort="name">Product ${sortIcon('name')}</div>
-                <div class="text-center cursor-pointer" data-sort="price">Price ${sortIcon('price')}</div>
-                <div class="text-center cursor-pointer" data-sort="rating">Rating ${sortIcon('rating')}</div>
-                <div class="text-right">${state.isShopkeeperMode ? 'Action' : 'Select'}</div>
-            </div>
-            <div class="space-y-2 max-h-96 overflow-y-auto pr-2">
-                ${sortedProducts.map(createItemCardHTML).join('')}
-            </div>
-        `;
-    };
+  const getCellColor = (store) => {
+    if (selectedStoreId === store.id) return 'bg-blue-400 dark:bg-blue-600';
+    if (destinationIds.has(store.id)) return 'bg-yellow-400 dark:bg-yellow-600';
     
-    const renderCart = () => {
-        const selectedProducts = state.products.filter(p => state.selectedProductIds.has(p.id));
-        if (selectedProducts.length === 0) {
-            cartWrapper.classList.add('hidden');
-            return;
-        }
-        
-        cartWrapper.classList.remove('hidden');
-        const totalCost = selectedProducts.reduce((sum, p) => sum + (p.discount ? p.price * (1 - p.discount / 100) : p.price), 0);
+    switch (store.category) {
+      case 'Fashion / Apparel': return 'bg-pink-200 dark:bg-pink-800';
+      case 'Footwear': return 'bg-indigo-200 dark:bg-indigo-800';
+      case 'Electronics / Gadgets': return 'bg-sky-200 dark:bg-sky-800';
+      case 'Food / Restaurants': return 'bg-orange-200 dark:bg-orange-800';
+      case 'Amenity': return 'bg-teal-200 dark:bg-teal-800';
+      default: return 'bg-slate-200 dark:bg-slate-700';
+    }
+  };
 
-        cartContainer.innerHTML = `
-            <div class="flex justify-between items-center mb-3">
-                <h3 class="text-lg font-bold text-gray-700 dark:text-gray-300">Your List</h3>
-                <button id="clear-cart-btn" class="text-sm text-gray-500 hover:text-red-500 transition-colors">Clear All</button>
-            </div>
-            <ul class="space-y-1 mb-4 max-h-40 overflow-y-auto pr-2">
-                ${selectedProducts.map(p => `
-                    <li class="flex justify-between text-sm">
-                        <span>${p.name}</span>
-                        <span>$${(p.discount ? p.price * (1 - p.discount / 100) : p.price).toFixed(2)}</span>
-                    </li>`).join('')}
-            </ul>
-            <div class="border-t border-gray-200 dark:border-gray-600 pt-3 flex justify-between items-center font-bold">
-                <span>Total</span>
-                <span>$${totalCost.toFixed(2)}</span>
-            </div>
-            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button id="find-route-btn" class="w-full text-white font-semibold py-2 px-4 rounded-lg transition-colors ${state.path.length > 0 ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600'}">
-                    ${state.path.length > 0 ? 'Route Found!' : 'Find Route'}
-                </button>
-                <button id="checkout-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Checkout</button>
-            </div>`;
-    };
-
-    const renderModals = () => {
-        const selectedProducts = state.products.filter(p => state.selectedProductIds.has(p.id));
-        const totalCost = selectedProducts.reduce((sum, p) => sum + (p.discount ? p.price * (1 - p.discount / 100) : p.price), 0);
-
-        const generateQrCodeSvg = () => {
-            const size = 200, boxSize = 10; let path = '';
-            for (let i = 0; i < size / boxSize; i++) for (let j = 0; j < size / boxSize; j++) if (Math.random() > 0.5) path += `M${i*boxSize},${j*boxSize}h${boxSize}v${boxSize}h-${boxSize}z `;
-            return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect width="${size}" height="${size}" fill="white"/><path d="${path}" fill="black"/></svg>`;
-        };
-
-        modalContainer.innerHTML = `
-            <div id="checkout-modal" class="modal ${state.isCheckoutModalOpen ? 'is-open' : ''}">
-              <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6 relative" onclick="event.stopPropagation()">
-                <button data-action="close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-                <h2 class="text-2xl font-bold text-center mb-2 text-gray-800 dark:text-white">Checkout</h2>
-                <p class="text-center text-gray-500 dark:text-gray-400 mb-6">Thank you for shopping with us!</p>
-                <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-6">
-                  <div class="flex justify-between items-center mb-2"><span class="text-gray-600 dark:text-gray-300">Items (${selectedProducts.length})</span><span class="font-medium">$${totalCost.toFixed(2)}</span></div>
-                  <div class="flex justify-between items-center text-lg font-bold"><span class="text-gray-800 dark:text-white">Total Amount</span><span class="text-indigo-600 dark:text-indigo-400">$${totalCost.toFixed(2)}</span></div>
-                </div>
-                <div class="text-center"><h3 class="font-semibold mb-3 text-gray-700 dark:text-gray-300">Payment Method</h3><p class="text-sm text-gray-400 dark:text-gray-500 mt-4">(Payment system is a placeholder)</p></div>
-                <button data-action="close-modal" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg">Confirm Purchase</button>
-              </div>
-            </div>
-
-            <div id="qr-modal" class="modal ${state.isQrModalOpen ? 'is-open' : ''}">
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-8 relative" onclick="event.stopPropagation()">
-                    <button data-action="close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-                    <h2 class="text-2xl font-bold text-center mb-4 text-gray-800 dark:text-white">Share App Link</h2>
-                    <div class="flex justify-center mb-4"><div class="p-2 bg-white rounded-lg">${generateQrCodeSvg()}</div></div>
-                    <p class="text-center text-gray-600 dark:text-gray-400 text-sm">Scan this code to open on another device.</p>
-                    <input type="text" readonly value="${window.location.href}" class="w-full mt-4 bg-gray-100 dark:bg-gray-700 border rounded-lg p-2 text-center text-xs" onfocus="this.select()" />
-                </div>
-            </div>
-
-            <div id="add-product-modal" class="modal ${state.isAddProductModalOpen ? 'is-open' : ''}">
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6 relative" onclick="event.stopPropagation()">
-                    <button data-action="close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                    <h2 class="text-2xl font-bold text-center mb-6 text-gray-800 dark:text-white">Add New Product</h2>
-                    <form id="add-product-form" class="space-y-4">
-                        <div>
-                            <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Product Name</label>
-                            <input type="text" name="name" required class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label for="price" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Price</label>
-                                <input type="number" name="price" step="0.01" required class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                            </div>
-                            <div>
-                                <label for="rating" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Rating (1-5)</label>
-                                <input type="number" name="rating" step="0.1" min="1" max="5" required class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label for="discount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Discount (%)</label>
-                                <input type="number" name="discount" min="0" max="100" class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                            </div>
-                            <div>
-                                <label for="shopId" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Shop</label>
-                                <select name="shopId" required class="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                    ${SHOPS.map(shop => `<option value="${shop.id}">${shop.name}</option>`).join('')}
-                                </select>
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">
-                            Save Product
-                        </button>
-                    </form>
-                </div>
-            </div>
-        `;
-    };
-
-    const render = () => {
-        renderHeader();
-        renderFloorMap();
-        renderItemList();
-        renderCart();
-        renderModals();
-        document.body.classList.toggle('modal-open', state.isCheckoutModalOpen || state.isQrModalOpen || state.isAddProductModalOpen);
-    };
-
-    // --- EVENT HANDLERS ---
-    const handleAddNewProduct = () => {
-        const form = document.getElementById('add-product-form');
-        if (!form) return;
-        
-        const formData = new FormData(form);
-        const newProduct = {
-            id: state.products.length > 0 ? Math.max(...state.products.map(p => p.id)) + 1 : 1,
-            name: formData.get('name')?.toString().trim(),
-            price: parseFloat(formData.get('price')),
-            rating: parseFloat(formData.get('rating')),
-            shopId: parseInt(formData.get('shopId'), 10),
-            discount: formData.get('discount') ? parseFloat(formData.get('discount')) : undefined,
-        };
-        
-        if (!newProduct.discount) {
-            delete newProduct.discount;
-        }
-
-        if (!newProduct.name || isNaN(newProduct.price) || isNaN(newProduct.rating) || isNaN(newProduct.shopId)) {
-            alert('Please fill out all required fields with valid values.');
-            return;
-        }
-
-        state.products.push(newProduct);
-        handleModal('addProduct', false);
-    };
-
-    const handleToggleMode = () => {
-        state.isShopkeeperMode = !state.isShopkeeperMode;
-        render();
-    };
-
-    const handleSort = (key) => {
-        if (state.sortKey === key) {
-            state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            state.sortKey = key;
-            state.sortDirection = 'asc';
-        }
-        renderItemList();
-    };
-
-    const handleToggleProduct = (productId) => {
-        if (state.selectedProductIds.has(productId)) {
-            state.selectedProductIds.delete(productId);
-        } else {
-            state.selectedProductIds.add(productId);
-        }
-        state.path = [];
-        render();
-    };
+  const handleMapClick = (e) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / CELL_SIZE);
+      const y = Math.floor((e.clientY - rect.top) / CELL_SIZE);
+      onMapClick({ x, y });
+  };
     
-    const handleFindRoute = () => {
-        const selectedProducts = state.products.filter(p => state.selectedProductIds.has(p.id));
-        const targetShopIds = new Set(selectedProducts.map(p => p.shopId));
-        const targetShops = SHOPS.filter(s => targetShopIds.has(s.id));
-        state.path = dijkstra(START_POINT, targetShops);
-        render();
-    };
+  return (
+    <div 
+      className="relative bg-gray-50 dark:bg-gray-800/50 overflow-auto shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 select-none" 
+      style={{ width: MAP_WIDTH * CELL_SIZE, height: MAP_HEIGHT * CELL_SIZE }}
+      onClick={handleMapClick}
+    >
+      {stores.map(store => (
+        <div
+          key={store.id}
+          className={`absolute flex items-center justify-center border border-gray-400 dark:border-gray-600 transition-colors duration-300 ${getCellColor(store)}`}
+          style={{
+            left: store.x * CELL_SIZE,
+            top: store.y * CELL_SIZE,
+            width: store.width * CELL_SIZE,
+            height: store.height * CELL_SIZE,
+          }}
+        >
+          <span className="text-xs text-center p-1 font-semibold text-gray-700 dark:text-gray-200">
+            {store.name}
+          </span>
+        </div>
+      ))}
 
-    const handleClearCart = () => {
-        state.selectedProductIds.clear();
-        state.path = [];
-        render();
-    };
+      {path && path.map((point, index) => {
+        const isConnector = (index > 0 && path[index - 1].floor !== point.floor) || (index < path.length - 1 && path[index + 1].floor !== point.floor);
+        return (
+          <div
+            key={index}
+            className={`absolute rounded-full ${isConnector ? 'bg-purple-500 animate-bounce' : 'bg-blue-500/80 animate-pulse'}`}
+            style={{
+              left: (point.x * CELL_SIZE) + (CELL_SIZE / 4),
+              top: (point.y * CELL_SIZE) + (CELL_SIZE / 4),
+              width: CELL_SIZE / 2,
+              height: CELL_SIZE / 2,
+              animationDelay: `${index * 0.02}s`,
+            }}
+            title={isConnector ? "Go to another floor" : ""}
+          />
+        );
+      })}
+      
+      {startPoint && (
+         <div
+            className="absolute flex items-center justify-center"
+            style={{
+                left: startPoint.x * CELL_SIZE,
+                top: startPoint.y * CELL_SIZE,
+                width: CELL_SIZE,
+                height: CELL_SIZE,
+                transform: 'translateY(-50%)',
+            }}
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-green-500 drop-shadow-lg">
+                <path fillRule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+            </svg>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// From components/ControlPanel.tsx
+const ControlPanel = ({
+  language, setLanguage, isShopkeeperMode, setIsShopkeeperMode,
+  shopkeeperStoreId, setShopkeeperStoreId, startPointId, setStartPointId,
+  destinations, setDestinations, onGetDirections, onClearRoute,
+  isNavigating, onToggleVoiceNavigation
+}) => {
+  const t = (key) => TRANSLATIONS[key][language];
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const storesByFloor = useMemo(() => 
+    STORES.reduce((acc, store) => {
+      const floor = store.floor;
+      if (!acc[floor]) acc[floor] = [];
+      acc[floor].push(store);
+      return acc;
+    }, {})
+  , []);
+
+  const filteredStores = useMemo(() =>
+    STORES.filter(store =>
+      store.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ), [searchTerm]);
+
+  const handleDestinationChange = (store) => {
+    setDestinations(
+      destinations.some(d => d.id === store.id)
+        ? destinations.filter(d => d.id !== store.id)
+        : [...destinations, store]
+    );
+  };
+  
+  const destinationIds = new Set(destinations.map(d => d.id));
+
+  const floorName = (floor) => {
+    switch(floor) {
+      case 0: return t('groundFloor');
+      case 1: return t('firstFloor');
+      case 2: return t('secondFloor');
+      case 3: return t('thirdFloor');
+      default: return '';
+    }
+  }
+
+  return (
+    <div className="w-full md:w-96 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col space-y-4">
+      <div className="flex justify-between items-center">
+        <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t('title')}</h1>
+        <div className="flex items-center space-x-2">
+          <button onClick={() => setLanguage('en')} className={`px-2 py-1 text-sm rounded ${language === 'en' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>EN</button>
+          <button onClick={() => setLanguage('kn')} className={`px-2 py-1 text-sm rounded ${language === 'kn' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>ಕ</button>
+        </div>
+      </div>
+      
+      <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+        <button onClick={() => setIsShopkeeperMode(false)} className={`w-1/2 py-2 text-sm font-medium rounded-md transition-colors ${!isShopkeeperMode ? 'bg-white dark:bg-gray-800 shadow text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-300'}`}>{t('customerMode')}</button>
+        <button onClick={() => setIsShopkeeperMode(true)} className={`w-1/2 py-2 text-sm font-medium rounded-md transition-colors ${isShopkeeperMode ? 'bg-white dark:bg-gray-800 shadow text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-300'}`}>{t('shopkeeperMode')}</button>
+      </div>
+
+      {isShopkeeperMode ? (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('yourStore')}</label>
+          <select value={shopkeeperStoreId || ''} onChange={(e) => setShopkeeperStoreId(e.target.value)} className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+            <option value="">{t('selectYourStore')}</option>
+            {Object.entries(storesByFloor).map(([floor, stores]) => (
+              <optgroup key={floor} label={floorName(Number(floor))}>
+                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('currentLocation')}</label>
+           <select 
+            value={startPointId || ''} 
+            onChange={(e) => setStartPointId(e.target.value)} 
+            className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600"
+          >
+            <option value={YOU_ARE_HERE_ID}>{t('youAreHere')} (Click on Map)</option>
+            {Object.entries(storesByFloor).map(([floor, stores]) => (
+              <optgroup key={floor} label={floorName(Number(floor))}>
+                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('destination')}</label>
+        <div className="relative">
+          <input type="text" placeholder={t('searchStore')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600" />
+        </div>
+        <div className="max-h-48 overflow-y-auto mt-2 space-y-1 pr-2">
+          {filteredStores.map(store => (
+            <div key={store.id} className="flex items-center">
+              <input type="checkbox" id={`dest-${store.id}`} checked={destinationIds.has(store.id)} onChange={() => handleDestinationChange(store)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+              <label htmlFor={`dest-${store.id}`} className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">{store.name} ({floorName(store.floor)})</label>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={onGetDirections} className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition-colors">{t('getDirections')}</button>
+        <button onClick={onClearRoute} className="w-full bg-gray-500 text-white p-2 rounded-md hover:bg-gray-600 transition-colors">{t('clearRoute')}</button>
+      </div>
+
+      <button
+        onClick={onToggleVoiceNavigation}
+        className={`w-full p-2 rounded-md transition-colors ${isNavigating ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white`}
+        disabled={destinations.length === 0}
+      >
+        {isNavigating ? t('stopNavigation') : t('startNavigation')}
+      </button>
+
+    </div>
+  );
+};
+
+// From App.tsx
+const App = () => {
+  const [language, setLanguage] = useState('en');
+  const [isShopkeeperMode, setIsShopkeeperMode] = useState(false);
+  const [shopkeeperStoreId, setShopkeeperStoreId] = useState(null);
+  
+  const [startPoint, setStartPoint] = useState(null);
+  const [startPointId, setStartPointId] = useState(null);
+  const [destinations, setDestinations] = useState([]);
+  const [path, setPath] = useState(null);
+  
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [message, setMessage] = useState('');
+  const [selectedStoreId, setSelectedStoreId] = useState(null);
+  const [currentFloor, setCurrentFloor] = useState(0);
+  
+  const utteranceRef = useRef(null);
+
+  const t = useCallback((key, replacements) => {
+    let text = TRANSLATIONS[key]?.[language] || key;
+    if (replacements) {
+        Object.entries(replacements).forEach(([k, v]) => {
+            text = text.replace(`{${k}}`, v);
+        });
+    }
+    return text;
+  }, [language]);
+  
+  const floorName = useCallback((floor) => {
+    switch(floor) {
+      case 0: return t('groundFloor');
+      case 1: return t('firstFloor');
+      case 2: return t('secondFloor');
+      case 3: return t('thirdFloor');
+      default: return '';
+    }
+  }, [t]);
+
+  useEffect(() => {
+    const getStoreDoorPoint = (storeId) => {
+        const store = STORES.find(s => s.id === storeId);
+        if (store) {
+          return { x: store.x + store.door.x, y: store.y + store.door.y, floor: store.floor };
+        }
+        return null;
+    }
+
+    if (isShopkeeperMode) {
+      if (shopkeeperStoreId) {
+        setStartPoint(getStoreDoorPoint(shopkeeperStoreId));
+        setStartPointId(shopkeeperStoreId);
+      } else {
+        setStartPoint(null);
+        setStartPointId(null);
+      }
+    } else {
+        if(startPointId && startPointId !== YOU_ARE_HERE_ID) {
+            setStartPoint(getStoreDoorPoint(startPointId));
+        } else if (!startPointId) {
+            setStartPoint(null);
+        }
+    }
+  }, [isShopkeeperMode, shopkeeperStoreId, startPointId]);
+
+  useEffect(() => {
+    if (startPoint) {
+      setCurrentFloor(startPoint.floor);
+    }
+  }, [startPoint]);
+
+  const handleMapClick = (point) => {
+    if (!isShopkeeperMode) {
+      setStartPoint({ ...point, floor: currentFloor });
+      setStartPointId(YOU_ARE_HERE_ID);
+    }
+  };
+
+  const showMessage = (msg) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(''), 3000);
+  };
+  
+  const handleGetDirections = useCallback(() => {
+    if (!startPoint || destinations.length === 0) {
+      showMessage(t('selectStartAndDest'));
+      return;
+    }
+
+    let fullPath = [];
+    let currentStart = startPoint;
+    let pathFound = true;
     
-    const handleModal = (modal, open) => {
-        if (modal === 'checkout') state.isCheckoutModalOpen = open;
-        if (modal === 'qr') state.isQrModalOpen = open;
-        if (modal === 'addProduct') state.isAddProductModalOpen = open;
-        render();
-    };
+    const sortedDestinations = [...destinations].sort((a,b) => a.floor - b.floor);
 
-    // --- INITIALIZATION ---
-    const setupEventListeners = () => {
-        document.body.addEventListener('click', (e) => {
-            const target = e.target.closest('[data-action], [data-sort], #mode-toggle, #qr-code-btn, #add-product-btn, #find-route-btn, #clear-cart-btn, #checkout-btn, .modal');
-            if (!target) return;
+    for (const dest of sortedDestinations) {
+      const destPoint = { x: dest.x + dest.door.x, y: dest.y + dest.door.y, floor: dest.floor };
+      const segment = findPath(currentStart, destPoint);
+      if (segment) {
+        fullPath = fullPath.length === 0 ? segment : fullPath.concat(segment.slice(1));
+        currentStart = destPoint;
+      } else {
+        pathFound = false;
+        break;
+      }
+    }
 
-            // Header buttons
-            if (target.id === 'mode-toggle') handleToggleMode();
-            if (target.id === 'qr-code-btn') handleModal('qr', true);
-            if (target.id === 'add-product-btn') handleModal('addProduct', true);
+    if (pathFound) {
+      setPath(fullPath);
+    } else {
+      setPath(null);
+      showMessage(t('routeNotFound'));
+    }
+  }, [startPoint, destinations, t]);
 
-            // Item list
-            const sortKey = target.dataset.sort;
-            if (sortKey) handleSort(sortKey);
+  const handleClearRoute = useCallback(() => {
+    setPath(null);
+    setDestinations([]);
+    if (!isShopkeeperMode) {
+      setStartPoint(null);
+      setStartPointId(null);
+    }
+    stopVoiceNavigation();
+    showMessage(t('routeCleared'));
+  }, [isShopkeeperMode, t]);
+  
+  const generateDirections = useCallback(() => {
+    if (!path || path.length < 2) return [];
 
-            const itemAction = target.dataset.action;
-            const productId = parseInt(target.closest('[data-product-id]')?.dataset.productId, 10);
-            if (itemAction === 'toggle' && productId) handleToggleProduct(productId);
-            // Add edit/save logic for shopkeeper mode here if needed
+    const directions = [];
+    let currentPos = 0;
+    const destPoints = new Map(destinations.map(d => [`${d.x+d.door.x},${d.y+d.door.y},${d.floor}`, d.name]));
 
-            // Cart buttons
-            if (target.id === 'find-route-btn') handleFindRoute();
-            if (target.id === 'clear-cart-btn') handleClearCart();
-            if (target.id === 'checkout-btn') handleModal('checkout', true);
-            
-            // Modals
-            if (itemAction === 'close-modal' || target.classList.contains('modal')) {
-                handleModal('checkout', false);
-                handleModal('qr', false);
-                handleModal('addProduct', false);
+    while (currentPos < path.length - 1) {
+        const currentPoint = path[currentPos];
+        const nextPoint = path[currentPos + 1];
+
+        if (currentPoint.floor !== nextPoint.floor) {
+            const connector = STORES.find(s => s.x <= currentPoint.x && s.x + s.width > currentPoint.x && s.y <= currentPoint.y && s.y + s.height > currentPoint.y && s.floor === currentPoint.floor && s.linksTo);
+            const toFloorName = floorName(nextPoint.floor);
+            if (connector) {
+                if (connector.name.toLowerCase().includes('escalator')) {
+                    if (nextPoint.floor > currentPoint.floor) {
+                        directions.push(t('takeEscalatorUp', {floorName: toFloorName}));
+                    } else {
+                        directions.push(t('takeEscalatorDown', {floorName: toFloorName}));
+                    }
+                } else if (connector.name.toLowerCase().includes('stairs')) {
+                    directions.push(t('takeStairsTo', {floorName: toFloorName}));
+                }
             }
+            currentPos++;
+            continue;
+        }
+
+        let dx = nextPoint.x - currentPoint.x;
+        let dy = nextPoint.y - currentPoint.y;
+        
+        let steps = 0;
+        while (currentPos + steps + 1 < path.length &&
+               path[currentPos + steps + 1].floor === currentPoint.floor &&
+               path[currentPos + steps + 1].x - path[currentPos + steps].x === dx &&
+               path[currentPos + steps + 1].y - path[currentPos + steps].y === dy) {
+            steps++;
+        }
+
+        if (steps > 0) {
+            if (dx === 1) directions.push(t('turnRight') + ', ' + t('walkForward') + ` ${steps} ` + t('steps'));
+            else if (dx === -1) directions.push(t('turnLeft') + ', ' + t('walkForward') + ` ${steps} ` + t('steps'));
+            else if (dy === 1) directions.push(t('walkForward') + ` ${steps} ` + t('steps'));
+            else if (dy === -1) directions.push(t('walkForward') + ` ${steps} ` + t('steps'));
+        }
+        
+        currentPos += steps;
+
+        const destKey = `${path[currentPos].x},${path[currentPos].y},${path[currentPos].floor}`;
+        if (destPoints.has(destKey)) {
+            const destName = destPoints.get(destKey);
+            directions.push(t('youHaveArrived', {destination: destName}));
+            destPoints.delete(destKey);
+        }
+    }
+    if (destinations.length > 0) {
+      directions.push(t('navigationComplete'));
+    }
+    return directions;
+  }, [path, destinations, t, floorName]);
+
+  const speak = (text, onEnd) => {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language === 'kn' ? 'kn-IN' : 'en-US';
+    utterance.onend = onEnd;
+    utteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  };
+  
+  const stopVoiceNavigation = () => {
+      window.speechSynthesis.cancel();
+      setIsNavigating(false);
+  }
+
+  const startVoiceNavigation = useCallback(() => {
+    if (!path) return;
+    setIsNavigating(true);
+    const directions = generateDirections();
+    let currentStep = 0;
+
+    const speakNext = () => {
+      if (currentStep < directions.length) {
+        speak(directions[currentStep], () => {
+          currentStep++;
+          speakNext();
         });
-
-        document.body.addEventListener('submit', (e) => {
-            if (e.target.id === 'add-product-form') {
-                e.preventDefault();
-                handleAddNewProduct();
-            }
-        });
+      } else {
+        setIsNavigating(false);
+      }
     };
+    speakNext();
+  }, [path, generateDirections, language]);
 
-    const init = () => {
-        state.products = JSON.parse(JSON.stringify(INITIAL_PRODUCTS));
-        setupEventListeners();
-        render();
-    };
+  const handleToggleVoiceNavigation = () => {
+    if (isNavigating) {
+      stopVoiceNavigation();
+    } else {
+      startVoiceNavigation();
+    }
+  };
 
-    init();
-});
+  const visibleStores = useMemo(() => STORES.filter(s => s.floor === currentFloor), [currentFloor]);
+  const visiblePath = useMemo(() => path ? path.filter(p => p.floor === currentFloor) : null, [path, currentFloor]);
+  const visibleStartPoint = useMemo(() => startPoint && startPoint.floor === currentFloor ? startPoint : null, [startPoint, currentFloor]);
+
+  return (
+    <div className="min-h-screen flex flex-col md:flex-row items-start justify-center p-4 gap-4 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <ControlPanel 
+        language={language} setLanguage={setLanguage}
+        isShopkeeperMode={isShopkeeperMode} setIsShopkeeperMode={setIsShopkeeperMode}
+        shopkeeperStoreId={shopkeeperStoreId} setShopkeeperStoreId={setShopkeeperStoreId}
+        startPointId={startPointId} setStartPointId={setStartPointId}
+        destinations={destinations} setDestinations={setDestinations}
+        onGetDirections={handleGetDirections}
+        onClearRoute={handleClearRoute}
+        isNavigating={isNavigating}
+        onToggleVoiceNavigation={handleToggleVoiceNavigation}
+      />
+      <div className="flex flex-col items-center justify-center gap-2">
+        <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 p-1 rounded-lg shadow">
+          {FLOORS.map(floor => (
+              <button
+                key={floor}
+                onClick={() => setCurrentFloor(floor)}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${currentFloor === floor ? 'bg-blue-500 text-white shadow-inner' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+              >
+                  {floorName(floor)}
+              </button>
+          ))}
+        </div>
+        <div className="flex-grow flex items-center justify-center">
+            <StoreMap
+              stores={visibleStores}
+              path={visiblePath}
+              startPoint={visibleStartPoint}
+              destinations={destinations}
+              onMapClick={handleMapClick}
+              selectedStoreId={selectedStoreId}
+            />
+        </div>
+      </div>
+      {message && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-6 py-3 rounded-full shadow-lg text-sm z-50">
+          {message}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// From index.tsx
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
