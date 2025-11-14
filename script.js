@@ -613,3 +613,4 @@ const App = () => {
 const rootElement = document.getElementById('root');
 const root = ReactDOM.createRoot(rootElement);
 root.render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
